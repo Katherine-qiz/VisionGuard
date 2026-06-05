@@ -1,0 +1,95 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fb;
+  color: #172033;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 48px;
+}
+
+.hero {
+  max-width: 900px;
+  margin-bottom: 40px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #4f7cff;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 44px;
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin-top: 16px;
+  max-width: 680px;
+  color: #5f6b7a;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  min-height: 150px;
+  padding: 22px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(20, 35, 80, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.label {
+  color: #6b7280;
+  font-size: 15px;
+}
+
+strong {
+  font-size: 42px;
+  line-height: 1;
+}
+
+.unit {
+  color: #8b95a1;
+  font-size: 16px;
+}
+
+.score-card {
+  background: #172033;
+  color: #ffffff;
+}
+
+.score-card .label,
+.score-card .unit {
+  color: #d1d5db;
+}
+
+.error {
+  padding: 16px;
+  border-radius: 12px;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.loading {
+  color: #6b7280;
+}
