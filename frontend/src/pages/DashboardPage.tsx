@@ -42,7 +42,7 @@ function DashboardPage() {
                     {metrics ? (
                         <>
                             <section className="dashboard-top-grid">
-                                <CameraComparisonPanel />
+                                <CameraComparisonPanel onAnalysisResult={setMetrics} />
 
                                 <aside className="right-stack">
                                     <EyeHealthScoreCard score={metrics.eyeHealthScore} />
@@ -95,7 +95,7 @@ function DashboardPage() {
                         </>
                     ) : (
                         <>
-                            <CameraComparisonPanel />
+                            <CameraComparisonPanel onAnalysisResult={setMetrics} />
                             <section className="panel loading-panel">Loading metrics...</section>
                         </>
                     )}

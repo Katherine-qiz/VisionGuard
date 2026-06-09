@@ -77,6 +77,16 @@ def build_alerts(
     return alerts
 
 
+def get_base64_payload(image_base64: str) -> str:
+    """
+    Accept either a raw base64 string or a data URL and return the payload.
+    """
+    if "," in image_base64:
+        return image_base64.split(",", 1)[1].strip()
+
+    return image_base64.strip()
+
+
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({
@@ -115,7 +125,7 @@ def analyze_frame():
     # and old project field "frame".
     image_base64 = data.get("image") or data.get("frame")
 
-    if not image_base64:
+    if not isinstance(image_base64, str) or not image_base64.strip():
         return jsonify({
             "success": False,
             "error": "No image provided"
@@ -124,13 +134,8 @@ def analyze_frame():
     # Basic validation: check whether base64 image looks valid.
     # This does not perform computer vision yet.
     try:
-        if "," in image_base64:
-            image_payload = image_base64.split(",", 1)[1]
-        else:
-            image_payload = image_base64
-
-        # Validate base64 payload can be decoded
-        base64.b64decode(image_payload, validate=False)
+        image_payload = get_base64_payload(image_base64)
+        base64.b64decode(image_payload, validate=True)
     except Exception as error:
         return jsonify({
             "success": False,
@@ -166,6 +171,7 @@ def analyze_frame():
         "useTimeSeconds": use_time_seconds,
         "eyeHealthScore": eye_health_score,
         "alerts": alerts,
+        "faceDetected": True,
         "processedFrame": None
     })
 
