@@ -454,8 +454,8 @@ label {
   align-content: stretch;
 }
 
-.dashboard-top-grid > .camera-panel,
-.dashboard-top-grid > .right-stack,
+.dashboard-top-grid>.camera-panel,
+.dashboard-top-grid>.right-stack,
 .dashboard-top-grid .score-card,
 .dashboard-top-grid .eye-buddy-card {
   height: 100%;
@@ -476,7 +476,7 @@ label {
   align-items: stretch;
 }
 
-.dashboard-bottom-grid > .right-stack {
+.dashboard-bottom-grid>.right-stack {
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
@@ -517,7 +517,7 @@ label {
   font-weight: 800;
 }
 
-.camera-card-header > span:first-child {
+.camera-card-header>span:first-child {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -664,7 +664,7 @@ label {
   font-weight: 700;
 }
 
-.metric-card-top > span:first-child {
+.metric-card-top>span:first-child {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -881,6 +881,7 @@ label {
 /* Responsive */
 
 @media (max-width: 1280px) {
+
   .dashboard-top-grid,
   .dashboard-bottom-grid {
     grid-template-columns: 1fr;
@@ -890,7 +891,7 @@ label {
     font-size: 36px;
   }
 
-  .dashboard-top-grid > .right-stack {
+  .dashboard-top-grid>.right-stack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -959,7 +960,7 @@ label {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-bottom-grid > .right-stack {
+  .dashboard-bottom-grid>.right-stack {
     grid-template-rows: auto;
   }
 }
@@ -997,5 +998,44 @@ label {
 
   .buddy-body {
     align-items: flex-start;
+  }
+}
+
+/* 容器横向排列 */
+.ai-report-cards {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  /* 小屏幕时自动换行 */
+  margin-top: 16px;
+}
+
+/* 每个小卡片 */
+.ai-report-cards .report-section {
+  flex: 1;
+  /* 平均分配宽度 */
+  min-width: 200px;
+  /* 防止太窄 */
+  padding: 16px;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* 提示文字醒目 */
+.risk-notice.highlighted {
+  font-weight: bold;
+  font-size: 14px;
+  color: #d93025;
+  border: 1px solid #d93025;
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* 响应式：小屏幕下纵向排列 */
+@media (max-width: 1024px) {
+  .ai-report-cards {
+    flex-direction: column;
   }
 }
