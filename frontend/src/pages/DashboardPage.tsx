@@ -9,7 +9,11 @@ import AIReportCard from "../components/AIReportCard";
 import ReminderList from "../components/ReminderList";
 import TrendCard from "../components/TrendCard";
 
-function DashboardPage() {
+type DashboardPageProps = {
+    onOpenSettings?: () => void;
+};
+
+function DashboardPage({ onOpenSettings }: DashboardPageProps) {
     const {
         metrics,
         isMonitoring,
@@ -29,7 +33,7 @@ function DashboardPage() {
 
     return (
         <div className="dashboard-shell">
-            <Sidebar />
+            <Sidebar onOpenSettings={onOpenSettings} />
 
             <main className="dashboard-main">
                 <TopBar username={username} />

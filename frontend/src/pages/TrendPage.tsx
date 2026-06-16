@@ -76,6 +76,10 @@ type TrendSummary = {
     mostCommonRisk: string;
 };
 
+type TrendPageProps = {
+    onOpenSettings?: () => void;
+};
+
 function averageFromNullable(values: Array<number | null>) {
     const actualValues = values.filter((value): value is number => value !== null);
     return actualValues.length > 0 ? average(actualValues) : null;
@@ -203,7 +207,7 @@ function MetricTrendChart({
     );
 }
 
-function TrendPage() {
+function TrendPage({ onOpenSettings }: TrendPageProps) {
     const [samples, setSamples] = useState<MetricSample[]>([]);
     const [events, setEvents] = useState<ReminderEvent[]>([]);
     const [selectedDate, setSelectedDate] = useState(localDateKey());
@@ -314,7 +318,7 @@ function TrendPage() {
 
     return (
         <div className="dashboard-shell">
-            <Sidebar />
+            <Sidebar onOpenSettings={onOpenSettings} />
 
             <main className="dashboard-main">
                 <TopBar username={username} />

@@ -5,14 +5,15 @@ type PlaceholderPageProps = {
     eyebrow: string;
     title: string;
     description: string;
+    onOpenSettings?: () => void;
 };
 
-function PlaceholderPage({ eyebrow, title, description }: PlaceholderPageProps) {
+function PlaceholderPage({ eyebrow, title, description, onOpenSettings }: PlaceholderPageProps) {
     const username = localStorage.getItem("visionguard_username") || "Katherine";
 
     return (
         <div className="dashboard-shell">
-            <Sidebar />
+            <Sidebar onOpenSettings={onOpenSettings} />
             <main className="dashboard-main">
                 <TopBar username={username} />
                 <div className="dashboard-content">

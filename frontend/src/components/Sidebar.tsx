@@ -5,10 +5,13 @@ const navItems = [
     { label: "AI Assistant", to: "/ai-assistant" },
     { label: "AI Report", to: "/ai-report" },
     { label: "Trend", to: "/trend" },
-    { label: "Settings", to: "/settings" },
 ];
 
-function Sidebar() {
+type SidebarProps = {
+    onOpenSettings?: () => void;
+};
+
+function Sidebar({ onOpenSettings }: SidebarProps) {
     const location = useLocation();
 
     return (
@@ -31,6 +34,9 @@ function Sidebar() {
                         {item.label}
                     </Link>
                 ))}
+                <button className="nav-item nav-button" onClick={onOpenSettings} type="button">
+                    Settings
+                </button>
             </nav>
 
             <div className="sidebar-footer">
