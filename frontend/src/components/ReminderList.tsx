@@ -1,18 +1,21 @@
-function ReminderList() {
-    const reminders = [
-        {
-            label: "Blink rate too low",
-            type: "warning",
-        },
-        {
-            label: "Viewing distance too close",
-            type: "attention",
-        },
-        {
-            label: "Low ambient brightness",
-            type: "neutral",
-        },
-    ];
+import type { Reminder } from "../types/reminder";
+
+type ReminderListProps = {
+    reminders: Reminder[];
+};
+
+function ReminderList({ reminders }: ReminderListProps) {
+    const visibleReminders = reminders.length > 0
+        ? reminders
+        : [{
+            id: "all-good",
+            type: "face" as const,
+            title: "All good for now",
+            message: "Your viewing distance, brightness, and screen-use pattern look comfortable.",
+            level: "info" as const,
+            deliveryMethod: "card" as const,
+            cooldownMs: 0,
+        }];
 
     return (
         <section className="panel reminder-card">
@@ -24,13 +27,17 @@ function ReminderList() {
             </div>
 
             <div className="reminder-list">
-                {reminders.map((item) => (
-                    <div className="reminder-item" key={item.label}>
-                        <span className={`dot ${item.type}`} />
-                        <span>{item.label}</span>
+                {visibleReminders.map((item) => (
+                    <div className="reminder-item" key={item.id}>
+                        <span className={`dot ${item.level}`} />
+                        <div>
+                            <p className="reminder-title">{item.title}</p>
+                            <p className="reminder-message">{item.message}</p>
+                        </div>
                     </div>
                 ))}
             </div>
+
         </section>
     );
 }

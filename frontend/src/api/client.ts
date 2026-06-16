@@ -3,16 +3,8 @@ import type { EyeMetrics } from "../types/metrics";
 
 const API_BASE_URL = "http://127.0.0.1:5000";
 
-type AnalyzeAlert = {
-    type: string;
-    level: string;
-    message: string;
-};
-
 export type AnalyzeFrameResponse = EyeMetrics & {
     success: boolean;
-    alerts: AnalyzeAlert[];
-    faceDetected: boolean;
     processedFrame: string | null;
 };
 
@@ -20,10 +12,25 @@ export async function fetchEyeMetrics(): Promise<EyeMetrics> {
     const res = await fetch(`${API_BASE_URL}/api/stats`);
 
     if (!res.ok) {
-        throw new Error("Failed to fetch metrics");
+        const errorText = await res.text();
+        throw new Error(`Failed to fetch metrics: ${res.status} ${errorText}`);
     }
 
     return res.json();
+}
+
+export async function resetAnalyzerSession(): Promise<void> {
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/reset`, {
+            method: "POST",
+        });
+
+        if (!res.ok) {
+            console.warn(`Backend reset returned ${res.status}`);
+        }
+    } catch (err) {
+        console.warn("Failed to reset analyzer session:", err);
+    }
 }
 
 export async function analyzeFrame(imageBase64: string): Promise<AnalyzeFrameResponse> {

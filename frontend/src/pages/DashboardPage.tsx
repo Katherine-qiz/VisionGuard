@@ -1,33 +1,31 @@
-import { useEffect, useState } from "react";
-
-import { fetchEyeMetrics } from "../api/client";
-import type { EyeMetrics } from "../types/metrics";
+import { useMonitoring } from "../context/MonitoringContext";
 
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import CameraComparisonPanel from "../components/CameraComparisonPanel";
 import MetricCard from "../components/MetricCard";
 import EyeHealthScoreCard from "../components/EyeHealthScoreCard";
-import EyeBuddyCard from "../components/EyeBuddyCard";
 import AIReportCard from "../components/AIReportCard";
 import ReminderList from "../components/ReminderList";
 import TrendCard from "../components/TrendCard";
 
 function DashboardPage() {
-    const [metrics, setMetrics] = useState<EyeMetrics | null>(null);
-    const [error, setError] = useState("");
+    const {
+        metrics,
+        isMonitoring,
+        riskResult,
+        cardReminders,
+    } = useMonitoring();
 
     const username = localStorage.getItem("visionguard_username") || "Katherine";
-
-    useEffect(() => {
-        fetchEyeMetrics()
-            .then((data) => {
-                setMetrics(data);
-            })
-            .catch((err) => {
-                setError(err.message);
-            });
-    }, []);
+    const visibleReminders = isMonitoring ? cardReminders : [];
+    const riskByType = (type: "blink" | "distance" | "brightness" | "use_time") =>
+        riskResult.risks.find((risk) => risk.type === type);
+    const statusLabel = (level?: "good" | "attention" | "warning") =>
+        level === "good" ? "Good" : level === "attention" ? "Attention" : "Warning";
+    const blinkStatus = (metrics.blinkWindowSeconds ?? 0) < 30 ? "Calibrating" : statusLabel(riskByType("blink")?.level);
+    const blinkStatusType = (metrics.blinkWindowSeconds ?? 0) < 30 ? "attention" : riskByType("blink")?.level ?? "warning";
+    const continuousUseTimeSeconds = metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds;
 
     return (
         <div className="dashboard-shell">
@@ -37,68 +35,81 @@ function DashboardPage() {
                 <TopBar username={username} />
 
                 <div className="dashboard-content">
-                    {error && <div className="error-banner">Error: {error}</div>}
+                    <section className="dashboard-hero-grid">
+                        <CameraComparisonPanel />
 
-                    {metrics ? (
-                        <>
-                            <section className="dashboard-top-grid">
-                                <CameraComparisonPanel onAnalysisResult={setMetrics} />
+                        <aside className="dashboard-side-column">
+                            <EyeHealthScoreCard
+                                score={metrics.eyeHealthScore}
+                                level={metrics.scoreLevel}
+                                metrics={metrics}
+                                feedback={riskResult.scoreFeedback}
+                            />
+                            <ReminderList reminders={visibleReminders} />
+                        </aside>
+                    </section>
 
-                                <aside className="right-stack">
-                                    <EyeHealthScoreCard score={metrics.eyeHealthScore} />
-                                    <EyeBuddyCard score={metrics.eyeHealthScore} />
-                                </aside>
-                            </section>
+                    <section className="metrics-grid" aria-label="Eye health metrics">
+                        <MetricCard
+                            icon="👁"
+                            title="Blink Rate"
+                            value={metrics.blinkRate}
+                            unit="/ min"
+                            status={blinkStatus}
+                            statusType={blinkStatusType}
+                            helper="Recent 60s estimate"
+                        />
 
-                            <section className="metrics-grid" aria-label="Eye health metrics">
-                                <MetricCard
-                                    title="Blink Rate"
-                                    value={metrics.blinkRate}
-                                    unit="/ min"
-                                    status="Normal"
-                                    statusType="good"
-                                />
+                        <MetricCard
+                            icon="📏"
+                            title="Viewing Distance"
+                            value={metrics.distanceCm}
+                            unit="cm"
+                            status={statusLabel(riskByType("distance")?.level)}
+                            statusType={riskByType("distance")?.level ?? "warning"}
+                            helper="Current live distance"
+                        />
 
-                                <MetricCard
-                                    title="Viewing Distance"
-                                    value={metrics.distanceCm}
-                                    unit="cm"
-                                    status="Good"
-                                    statusType="good"
-                                />
+                        <MetricCard
+                            icon="💡"
+                            title="Brightness"
+                            value={metrics.brightnessLux}
+                            unit="lux"
+                            status={statusLabel(riskByType("brightness")?.level)}
+                            statusType={riskByType("brightness")?.level ?? "warning"}
+                            helper="Current camera-estimated light"
+                        />
 
-                                <MetricCard
-                                    title="Brightness"
-                                    value={metrics.brightnessLux}
-                                    unit="lux"
-                                    status="Good"
-                                    statusType="good"
-                                />
+                        <MetricCard
+                            icon="⏱"
+                            title="Use Time"
+                            value={Math.round(continuousUseTimeSeconds / 60)}
+                            unit="min"
+                            status={statusLabel(riskByType("use_time")?.level)}
+                            statusType={riskByType("use_time")?.level ?? "warning"}
+                            helper="Continuous focus time"
+                        />
+                    </section>
 
-                                <MetricCard
-                                    title="Use Time"
-                                    value={Math.round(metrics.useTimeSeconds / 60)}
-                                    unit="min"
-                                    status="Attention"
-                                    statusType="attention"
-                                />
-                            </section>
+                    <section className="metric-debug-row" aria-label="Blink detection diagnostics">
+                        <span>Session Blinks: {metrics.blinkCount}</span>
+                        <span>Recent Rate: {metrics.blinkRate}</span>
+                        <span>Raw: {metrics.rawBlinkRate ?? 0}</span>
+                        <span>Smoothed: {metrics.smoothedBlinkRate ?? metrics.blinkRate}</span>
+                        <span>Session: {Math.round((metrics.sessionUseTimeSeconds ?? 0) / 60)}m</span>
+                        <span>Active: {Math.round((metrics.activeScreenTimeSeconds ?? 0) / 60)}m</span>
+                        <span>Break: {metrics.breakDurationSeconds ?? 0}s</span>
+                        <span>EAR: {metrics.ear.toFixed(3)}</span>
+                        <span>Baseline: {metrics.earBaseline.toFixed(3)}</span>
+                        <span>Blink Window: {metrics.blinkWindowSeconds ?? 0}s</span>
+                        <span>Events in Window: {metrics.blinkEventsInWindow ?? 0}</span>
+                        <span>{metrics.isBlinking ? "Blinking" : "Eyes open"}</span>
+                    </section>
 
-                            <section className="dashboard-bottom-grid">
-                                <AIReportCard />
-
-                                <div className="right-stack">
-                                    <TrendCard />
-                                    <ReminderList />
-                                </div>
-                            </section>
-                        </>
-                    ) : (
-                        <>
-                            <CameraComparisonPanel onAnalysisResult={setMetrics} />
-                            <section className="panel loading-panel">Loading metrics...</section>
-                        </>
-                    )}
+                    <section className="dashboard-bottom-grid">
+                        <AIReportCard />
+                        <TrendCard />
+                    </section>
                 </div>
             </main>
         </div>
