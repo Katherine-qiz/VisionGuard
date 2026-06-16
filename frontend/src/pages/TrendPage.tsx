@@ -3,10 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import type { MetricSample } from "../utils/metricsStorage";
-import { dateKey, metricSampleDate, readMetricSamples } from "../utils/metricsStorage";
-import { readReminderEvents, reminderEventDate } from "../utils/reminderStorage";
+import { metricSampleDisplayDate, readMetricSamples } from "../utils/metricsStorage";
+import { readReminderEvents, reminderEventDisplayDate } from "../utils/reminderStorage";
 import type { ReminderEvent, ReminderType } from "../types/reminder";
 import { getCurrentUserId } from "../utils/user";
+import { localDateKey, utcDateKey } from "../utils/dateUtils";
 
 const riskTypes: ReminderType[] = ["use_time", "distance", "blink", "brightness", "face"];
 
@@ -14,17 +15,17 @@ function lastSevenDates() {
     return Array.from({ length: 7 }, (_, index) => {
         const date = new Date();
         date.setDate(date.getDate() - index);
-        return dateKey(date.getTime());
+        return localDateKey(date.getTime());
     }).reverse();
 }
 
-function getLatestSampleDateInRange(samples: MetricSample[], dates: string[]) {
+function getLatestSampleDisplayDateInRange(samples: MetricSample[], dates: string[]) {
     const dateSet = new Set(dates);
     const latestSample = samples
-        .filter((sample) => dateSet.has(metricSampleDate(sample)))
+        .filter((sample) => dateSet.has(metricSampleDisplayDate(sample)))
         .sort((a, b) => b.timestamp - a.timestamp)[0];
 
-    return latestSample ? metricSampleDate(latestSample) : dateKey();
+    return latestSample ? metricSampleDisplayDate(latestSample) : localDateKey();
 }
 
 function average(values: number[]) {
@@ -205,7 +206,7 @@ function MetricTrendChart({
 function TrendPage() {
     const [samples, setSamples] = useState<MetricSample[]>([]);
     const [events, setEvents] = useState<ReminderEvent[]>([]);
-    const [selectedDate, setSelectedDate] = useState(dateKey());
+    const [selectedDate, setSelectedDate] = useState(localDateKey());
     const [hasUserSelectedDate, setHasUserSelectedDate] = useState(false);
     const username = localStorage.getItem("visionguard_username") || "Katherine";
     const [debugUserId, setDebugUserId] = useState(getCurrentUserId());
@@ -221,13 +222,13 @@ function TrendPage() {
     const migrateLocalDatesToLocalTimezone = () => {
         const migratedSamples = readMetricSamples().map((sample) => ({
             ...sample,
-            date: dateKey(sample.timestamp),
+            date: localDateKey(sample.timestamp),
         }));
         localStorage.setItem("visionguard_metric_samples", JSON.stringify(migratedSamples));
 
         const migratedEvents = readReminderEvents().map((event) => ({
             ...event,
-            date: dateKey(event.triggeredAt),
+            date: localDateKey(event.triggeredAt),
         }));
         localStorage.setItem("visionguard_reminder_events", JSON.stringify(migratedEvents));
         window.dispatchEvent(new Event("visionguard-storage-updated"));
@@ -252,19 +253,19 @@ function TrendPage() {
     useEffect(() => {
         if (hasUserSelectedDate || samples.length === 0) return;
 
-        const selectedDateHasSamples = samples.some((sample) => metricSampleDate(sample) === selectedDate);
+        const selectedDateHasSamples = samples.some((sample) => metricSampleDisplayDate(sample) === selectedDate);
         if (selectedDateHasSamples) return;
 
-        const nextSelectedDate = getLatestSampleDateInRange(samples, dates);
+        const nextSelectedDate = getLatestSampleDisplayDateInRange(samples, dates);
         if (nextSelectedDate !== selectedDate) {
             setSelectedDate(nextSelectedDate);
         }
     }, [dates, hasUserSelectedDate, samples, selectedDate]);
 
     const sevenDayDateSet = useMemo(() => new Set(dates), [dates]);
-    const sevenDayEvents = events.filter((event) => sevenDayDateSet.has(reminderEventDate(event)));
-    const selectedSamples = samples.filter((sample) => metricSampleDate(sample) === selectedDate);
-    const selectedEvents = events.filter((event) => reminderEventDate(event) === selectedDate);
+    const sevenDayEvents = events.filter((event) => sevenDayDateSet.has(reminderEventDisplayDate(event)));
+    const selectedSamples = samples.filter((sample) => metricSampleDisplayDate(sample) === selectedDate);
+    const selectedEvents = events.filter((event) => reminderEventDisplayDate(event) === selectedDate);
     const summary = {
         avgScore: average(selectedSamples.map((sample) => sample.eyeHealthScore)),
         totalUseTime: Math.max(0, ...selectedSamples.map(sampleUseTimeSeconds)),
@@ -278,8 +279,8 @@ function TrendPage() {
         count: sevenDayEvents.filter((event) => event.type === type).length,
     }));
     const sevenDayRows = dates.map((date) => {
-        const daySamples = samples.filter((sample) => metricSampleDate(sample) === date);
-        const dayEvents = events.filter((event) => reminderEventDate(event) === date);
+        const daySamples = samples.filter((sample) => metricSampleDisplayDate(sample) === date);
+        const dayEvents = events.filter((event) => reminderEventDisplayDate(event) === date);
 
         return {
             date,
@@ -553,26 +554,16 @@ function TrendPage() {
                         <span>selectedSamples: {selectedSamples.length}</span>
                         <span>selectedEvents: {selectedEvents.length}</span>
                         <span>sevenDayEvents: {sevenDayEvents.length}</span>
-                        <span>
-                            latestSample: {latestSample
-                                ? `storedDate ${latestSample.date} / displayDate ${metricSampleDate(latestSample)} / score ${latestSample.eyeHealthScore}`
-                                : "none"}
-                        </span>
-                        <span>
-                            latestSampleTimestampLocal: {latestSample
-                                ? new Date(latestSample.timestamp).toLocaleString()
-                                : "none"}
-                        </span>
-                        <span>
-                            latestEvent: {latestEvent
-                                ? `storedDate ${latestEvent.date} / displayDate ${reminderEventDate(latestEvent)} / type ${latestEvent.type}`
-                                : "none"}
-                        </span>
-                        <span>
-                            latestEventTimestampLocal: {latestEvent
-                                ? new Date(latestEvent.triggeredAt).toLocaleString()
-                                : "none"}
-                        </span>
+                        <span>localDateKeyNow: {localDateKey()}</span>
+                        <span>utcDateKeyNow: {utcDateKey()}</span>
+                        <span>latestSampleStoredDate: {latestSample ? latestSample.date : "none"}</span>
+                        <span>latestSampleDisplayDate: {latestSample ? metricSampleDisplayDate(latestSample) : "none"}</span>
+                        <span>latestSampleTimestampLocal: {latestSample ? new Date(latestSample.timestamp).toLocaleString() : "none"}</span>
+                        <span>latestSampleScore: {latestSample ? latestSample.eyeHealthScore : "none"}</span>
+                        <span>latestEventStoredDate: {latestEvent ? latestEvent.date : "none"}</span>
+                        <span>latestEventDisplayDate: {latestEvent ? reminderEventDisplayDate(latestEvent) : "none"}</span>
+                        <span>latestEventTimestampLocal: {latestEvent ? new Date(latestEvent.triggeredAt).toLocaleString() : "none"}</span>
+                        <span>latestEventType: {latestEvent ? latestEvent.type : "none"}</span>
                     </section>
                 </div>
             </main>

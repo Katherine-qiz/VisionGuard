@@ -1,5 +1,6 @@
 import type { EyeMetrics, ScoreLevel } from "../types/metrics";
 import type { Reminder } from "../types/reminder";
+import { localDateKey } from "./dateUtils";
 import type { RiskItem } from "./riskEngine";
 
 const METRIC_SAMPLES_KEY = "visionguard_metric_samples";
@@ -32,15 +33,11 @@ export type MetricSample = {
 };
 
 export function dateKey(timestamp = Date.now()) {
-    const date = new Date(timestamp);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return localDateKey(timestamp);
 }
 
-export function metricSampleDate(sample: MetricSample) {
-    return dateKey(sample.timestamp);
+export function metricSampleDisplayDate(sample: MetricSample) {
+    return localDateKey(sample.timestamp);
 }
 
 export function readMetricSamples(): MetricSample[] {
@@ -63,7 +60,7 @@ export function saveMetricSample(
         id: `metric-${timestamp}`,
         userId,
         timestamp,
-        date: dateKey(timestamp),
+        date: localDateKey(timestamp),
         blinkRate: metrics.blinkRate,
         rawBlinkRate: metrics.rawBlinkRate,
         smoothedBlinkRate: metrics.smoothedBlinkRate,
@@ -100,5 +97,5 @@ export function saveMetricSample(
 }
 
 export function samplesForDate(date: string) {
-    return readMetricSamples().filter((sample) => metricSampleDate(sample) === date);
+    return readMetricSamples().filter((sample) => metricSampleDisplayDate(sample) === date);
 }

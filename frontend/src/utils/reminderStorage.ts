@@ -1,6 +1,6 @@
 import type { EyeMetrics } from "../types/metrics";
 import type { Reminder, ReminderEvent } from "../types/reminder";
-import { dateKey } from "./metricsStorage";
+import { localDateKey } from "./dateUtils";
 
 export const REMINDER_EVENTS_KEY = "visionguard_reminder_events";
 const MAX_EVENTS = 200;
@@ -14,8 +14,8 @@ export function readReminderEvents(): ReminderEvent[] {
     }
 }
 
-export function reminderEventDate(event: ReminderEvent) {
-    return dateKey(event.triggeredAt);
+export function reminderEventDisplayDate(event: ReminderEvent) {
+    return localDateKey(event.triggeredAt);
 }
 
 export function saveReminderEvent(
@@ -28,7 +28,7 @@ export function saveReminderEvent(
         ...reminder,
         userId,
         triggeredAt,
-        date: dateKey(triggeredAt),
+        date: localDateKey(triggeredAt),
         metricsSnapshot,
     };
 
@@ -47,5 +47,5 @@ export function saveReminderEvent(
 }
 
 export function reminderEventsForDate(date: string) {
-    return readReminderEvents().filter((event) => reminderEventDate(event) === date);
+    return readReminderEvents().filter((event) => reminderEventDisplayDate(event) === date);
 }
