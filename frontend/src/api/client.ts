@@ -50,3 +50,24 @@ export async function analyzeFrame(imageBase64: string): Promise<AnalyzeFrameRes
 
     return res.json();
 }
+
+export async function generateAIReport(payload: EyeMetrics) {
+    const res = await fetch(`${API_BASE_URL}/api/report`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            ...payload,
+            session_use_time: payload.sessionUseTimeSeconds ?? payload.useTimeSeconds,
+            total_use_time: payload.totalUseTimeSeconds ?? 0,
+            avg_session_use_time: payload.avgSessionUseTimeSeconds ?? payload.sessionUseTimeSeconds ?? payload.useTimeSeconds,
+        }),
+    });
+
+    if (!res.ok) {
+        throw new Error("Failed to generate AI report");
+    }
+
+    return res.json();
+}

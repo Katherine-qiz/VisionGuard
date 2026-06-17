@@ -31,9 +31,12 @@ const DEFAULT_METRICS: EyeMetrics = {
     brightnessLux: 0,
     useTimeSeconds: 0,
     sessionUseTimeSeconds: 0,
+    totalUseTimeSeconds: 0,
+    avgSessionUseTimeSeconds: 0,
     activeScreenTimeSeconds: 0,
     continuousUseTimeSeconds: 0,
     breakDurationSeconds: 0,
+    isCalibrating: true,
     eyeHealthScore: 80,
     scoreLevel: "Good",
     useTimeStatus: "normal",
@@ -328,7 +331,7 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
                     });
                 }
 
-                if (scoredMetrics.faceDetected && Date.now() - lastSampleSavedAtRef.current >= 5000) {
+                if (scoredMetrics.faceDetected && !scoredMetrics.isCalibrating && Date.now() - lastSampleSavedAtRef.current >= 5000) {
                     saveMetricSample(
                         userId,
                         scoredMetrics,

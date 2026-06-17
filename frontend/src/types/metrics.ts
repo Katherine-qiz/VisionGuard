@@ -16,9 +16,12 @@ export interface EyeMetrics {
     brightnessLux: number;
     useTimeSeconds: number;
     sessionUseTimeSeconds?: number;
+    totalUseTimeSeconds?: number;
+    avgSessionUseTimeSeconds?: number;
     activeScreenTimeSeconds?: number;
     continuousUseTimeSeconds?: number;
     breakDurationSeconds?: number;
+    isCalibrating?: boolean;
     eyeHealthScore: number;
     scoreLevel: ScoreLevel;
     useTimeStatus?: "normal" | "break_due" | "overdue" | "long_session";

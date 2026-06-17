@@ -80,11 +80,6 @@ function setStart(
     delete state[key];
 }
 
-function elapsed(state: SustainedState, key: SustainedTimeKey, now: number) {
-    const startedAt = state[key];
-    return typeof startedAt === "number" ? now - startedAt : 0;
-}
-
 function scoreLevel(score: number): ScoreLevel {
     if (score >= 85) return "Healthy";
     if (score >= 70) return "Good";
@@ -162,10 +157,29 @@ export function resetSustainedRiskState() {
 export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult {
     const state = readSustainedState();
     const risks: RiskItem[] = [];
-    let currentPenalty = 0;
     const blinkWindowSeconds = metrics.blinkWindowSeconds ?? 0;
-    const isBlinkCalibrating = blinkWindowSeconds < 30;
-    const continuousUseTimeSeconds = metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds;
+    const isBlinkCalibrating = metrics.isCalibrating ?? blinkWindowSeconds < 30;
+    if (isBlinkCalibrating) {
+        const calibrationScore = 80;
+        return {
+            score: calibrationScore,
+            scoreLevel: scoreLevel(calibrationScore),
+            mainIssue: "none",
+            risks: [],
+            reminders: [],
+            scoreFeedback: {
+                emoji: "🙂",
+                title: "Calibrating",
+                message: "VisionGuard is collecting enough active eye data before scoring.",
+            },
+            sustainedState: state,
+        };
+    }
+
+    const sessionUseTimeSeconds = metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds;
+    const totalUseTimeSeconds = metrics.totalUseTimeSeconds ?? 0;
+    const avgSessionUseTimeSeconds = metrics.avgSessionUseTimeSeconds ?? sessionUseTimeSeconds;
+    const continuousUseTimeSeconds = sessionUseTimeSeconds;
     const breakDurationSeconds = metrics.breakDurationSeconds ?? 0;
     const useTimeStatus = metrics.useTimeStatus
         ?? (continuousUseTimeSeconds < 20 * 60
@@ -183,7 +197,6 @@ export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult 
           : metrics.blinkRate >= 8
             ? "attention"
             : "warning";
-    currentPenalty += isBlinkCalibrating ? 0 : blinkLevel === "good" ? 0 : blinkLevel === "attention" ? 6 : 14;
     risks.push({
         type: "blink",
         level: blinkLevel,
@@ -205,7 +218,6 @@ export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult 
         : metrics.distanceCm >= 40
           ? "attention"
           : "warning";
-    currentPenalty += !metrics.faceDetected || metrics.distanceCm <= 0 ? 0 : distanceLevel === "good" ? 0 : distanceLevel === "attention" ? 6 : 14;
     risks.push({
         type: "distance",
         level: distanceLevel,
@@ -223,7 +235,6 @@ export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult 
         : (metrics.brightnessLux >= 100 && metrics.brightnessLux < 200) || (metrics.brightnessLux > 750 && metrics.brightnessLux <= 1000)
           ? "attention"
           : "warning";
-    currentPenalty += brightnessLevel === "good" ? 0 : brightnessLevel === "attention" ? 5 : 10;
     risks.push({
         type: "brightness",
         level: brightnessLevel,
@@ -237,7 +248,6 @@ export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult 
     });
 
     const useTimeLevel = useTimeStatus === "normal" ? "good" : useTimeStatus === "break_due" ? "attention" : "warning";
-    currentPenalty += useTimeStatus === "break_due" ? 3 : useTimeStatus === "overdue" ? 8 : useTimeStatus === "long_session" ? 15 : 0;
     risks.push({
         type: "use_time",
         level: useTimeLevel,
@@ -249,7 +259,6 @@ export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult 
     });
 
     if (!metrics.faceDetected) {
-        currentPenalty += breakDurationSeconds >= 120 ? 0 : breakDurationSeconds >= 30 ? 3 : 0;
         risks.push({
             type: "face",
             level: "attention",
@@ -282,22 +291,26 @@ export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult 
     setStart(state, "goodBrightnessStartedAt", brightnessLevel === "good", now);
     setStart(state, "faceMissingStartedAt", !metrics.faceDetected, now);
 
-    let sustainedPenalty = 0;
-    if (elapsed(state, "distanceAttentionStartedAt", now) >= 60 * 1000) sustainedPenalty += 4;
-    if (elapsed(state, "distanceWarningStartedAt", now) >= 30 * 1000) sustainedPenalty += 8;
-    if (elapsed(state, "blinkWarningStartedAt", now) >= 90 * 1000) sustainedPenalty += 8;
-    if (elapsed(state, "brightnessAttentionStartedAt", now) >= 60 * 1000) sustainedPenalty += 4;
-    if (elapsed(state, "useTimeAttentionStartedAt", now) >= 5 * 60 * 1000 && useTimeStatus === "overdue") sustainedPenalty += 6;
-    if (elapsed(state, "useTimeAttentionStartedAt", now) >= 10 * 60 * 1000 && useTimeStatus === "long_session") sustainedPenalty += 10;
-
-    let recoveryBonus = 0;
-    if (elapsed(state, "goodDistanceStartedAt", now) >= 60 * 1000) recoveryBonus += 3;
-    if (elapsed(state, "goodBlinkStartedAt", now) >= 60 * 1000) recoveryBonus += 3;
-    if (elapsed(state, "goodBrightnessStartedAt", now) >= 60 * 1000) recoveryBonus += 2;
-    if (state.completedBreak) recoveryBonus += 5;
-
-    const calculatedScore = 85 - currentPenalty - sustainedPenalty + recoveryBonus;
-    const score = Math.max(40, Math.min(100, Math.round(calculatedScore)));
+    const blinkScore = metrics.blinkRate >= 12 ? 100 : metrics.blinkRate >= 8 ? 70 : metrics.blinkRate >= 4 ? 40 : 20;
+    const distanceScore = !metrics.faceDetected || metrics.distanceCm <= 0
+        ? 70
+        : metrics.distanceCm >= 50 && metrics.distanceCm <= 100
+          ? 100
+          : (metrics.distanceCm >= 40 && metrics.distanceCm < 50) || (metrics.distanceCm > 100 && metrics.distanceCm <= 120)
+            ? 70
+            : metrics.distanceCm >= 30
+              ? 40
+              : 20;
+    const brightnessScore = brightnessLevel === "good" ? 100 : brightnessLevel === "attention" ? 70 : 40;
+    const timeLoadSeconds = (0.6 * totalUseTimeSeconds) + (0.4 * avgSessionUseTimeSeconds);
+    const timeLoadMinutes = timeLoadSeconds / 60;
+    const timeScore = timeLoadMinutes <= 20 ? 100 : timeLoadMinutes <= 40 ? 75 : timeLoadMinutes <= 60 ? 55 : 35;
+    const score = Math.max(0, Math.min(100, Math.round(
+        (0.35 * blinkScore)
+        + (0.25 * distanceScore)
+        + (0.20 * brightnessScore)
+        + (0.20 * timeScore),
+    )));
     const level = scoreLevel(score);
     const mainIssue = mainIssueFromRisks(risks);
     const reminders = risks

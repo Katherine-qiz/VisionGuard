@@ -9,7 +9,9 @@ def build_report_prompt(trend_data: dict) -> str:
     """
     normalized_data = {
         "blinkRate": trend_data.get("blinkRate"),
-        "useTimeSeconds": trend_data.get("useTimeSeconds", trend_data.get("useTime")),
+        "session_use_time": trend_data.get("session_use_time", trend_data.get("sessionUseTimeSeconds", trend_data.get("useTimeSeconds"))),
+        "total_use_time": trend_data.get("total_use_time", trend_data.get("totalUseTimeSeconds", trend_data.get("useTime"))),
+        "avg_session_use_time": trend_data.get("avg_session_use_time", trend_data.get("avgSessionUseTimeSeconds")),
         "distanceCm": trend_data.get("distanceCm", trend_data.get("distance")),
         "brightnessLux": trend_data.get("brightnessLux", trend_data.get("brightness")),
         "eyeHealthScore": trend_data.get("eyeHealthScore"),
@@ -25,7 +27,10 @@ Analyze the user's screen-use habits using these guidelines:
 - Blink rate below 8/min is high risk; 8-12/min is medium risk; 12+/min is usually comfortable.
 - Viewing distance below 40 cm is high risk; 40-50 cm is medium risk; 50-100 cm is recommended.
 - Brightness below 200 lux or above 750 lux can be uncomfortable.
-- Continuous use time above 20 minutes should trigger a break recommendation.
+- session_use_time is the current active session duration in seconds.
+- total_use_time is the daily accumulated active monitoring time in seconds.
+- avg_session_use_time is the user's average active session duration in seconds.
+- Continuous active use above 20 minutes should trigger a break recommendation.
 - Eye health score is 0-100, where higher is better.
 
 Return ONLY a valid JSON object. No extra text.
@@ -41,7 +46,9 @@ The JSON must match exactly this schema:
   "score": 0,
   "issues": ["string"],
   "recommendations": ["string"],
-  "score_explanation": "string"
+  "score_explanation": "string",
+  "session_use_time": 0,
+  "total_use_time": 0
 }}
 
 Rules:

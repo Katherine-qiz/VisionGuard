@@ -21,9 +21,12 @@ export type MetricSample = {
     brightnessLux: number;
     useTimeSeconds: number;
     sessionUseTimeSeconds: number;
+    totalUseTimeSeconds: number;
+    avgSessionUseTimeSeconds: number;
     activeScreenTimeSeconds: number;
     continuousUseTimeSeconds: number;
     breakDurationSeconds: number;
+    isCalibrating?: boolean;
     useTimeStatus?: EyeMetrics["useTimeStatus"];
     eyeHealthScore: number;
     scoreLevel: ScoreLevel;
@@ -71,9 +74,12 @@ export function saveMetricSample(
         brightnessLux: metrics.brightnessLux,
         useTimeSeconds: metrics.useTimeSeconds,
         sessionUseTimeSeconds: metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
+        totalUseTimeSeconds: metrics.totalUseTimeSeconds ?? metrics.activeScreenTimeSeconds ?? 0,
+        avgSessionUseTimeSeconds: metrics.avgSessionUseTimeSeconds ?? metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
         activeScreenTimeSeconds: metrics.activeScreenTimeSeconds ?? metrics.useTimeSeconds,
         continuousUseTimeSeconds: metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds,
         breakDurationSeconds: metrics.breakDurationSeconds ?? 0,
+        isCalibrating: metrics.isCalibrating,
         useTimeStatus: metrics.useTimeStatus,
         eyeHealthScore: metrics.eyeHealthScore,
         scoreLevel: metrics.scoreLevel,

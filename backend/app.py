@@ -1,4 +1,6 @@
 import base64
+import json
+import re
 import threading
 import time
 from collections import deque
@@ -8,6 +10,8 @@ import mediapipe as mp
 import numpy as np
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from services.openrouter import call_llm
+from services.prompt import build_report_prompt
 
 app = Flask(__name__)
 CORS(app)
@@ -25,6 +29,8 @@ FACE_CONNECTIONS = mp_face_mesh.FACEMESH_TESSELATION
 face_mesh = None
 face_mesh_error = None
 monitor_lock = threading.Lock()
+trend_samples = deque(maxlen=1000)
+trend_events = deque(maxlen=500)
 
 
 def get_face_mesh():
@@ -173,6 +179,150 @@ def get_base64_payload(image_base64: str) -> str:
     return image_base64.strip()
 
 
+def local_day_key(timestamp=None):
+    return time.strftime("%Y-%m-%d", time.localtime(timestamp or time.time()))
+
+
+def local_day_key_from_ms(timestamp_ms):
+    return local_day_key((timestamp_ms or 0) / 1000)
+
+
+def metric_sample_from_result(result):
+    timestamp_ms = int(time.time() * 1000)
+    return {
+        "id": f"backend-metric-{timestamp_ms}",
+        "userId": "backend",
+        "timestamp": timestamp_ms,
+        "date": local_day_key_from_ms(timestamp_ms),
+        "blinkRate": result.get("blinkRate", 0),
+        "rawBlinkRate": result.get("rawBlinkRate", 0),
+        "smoothedBlinkRate": result.get("smoothedBlinkRate", 0),
+        "blinkCount": result.get("blinkCount", 0),
+        "blinkEventsInWindow": result.get("blinkEventsInWindow", 0),
+        "blinkWindowSeconds": result.get("blinkWindowSeconds", 0),
+        "distanceCm": result.get("distanceCm", 0),
+        "brightnessLux": result.get("brightnessLux", 0),
+        "useTimeSeconds": result.get("useTimeSeconds", 0),
+        "sessionUseTimeSeconds": result.get("sessionUseTimeSeconds", result.get("useTimeSeconds", 0)),
+        "totalUseTimeSeconds": result.get("totalUseTimeSeconds", 0),
+        "avgSessionUseTimeSeconds": result.get("avgSessionUseTimeSeconds", 0),
+        "activeScreenTimeSeconds": result.get("activeScreenTimeSeconds", 0),
+        "continuousUseTimeSeconds": result.get("continuousUseTimeSeconds", 0),
+        "breakDurationSeconds": result.get("breakDurationSeconds", 0),
+        "isCalibrating": result.get("isCalibrating", False),
+        "useTimeStatus": result.get("useTimeStatus", "normal"),
+        "eyeHealthScore": result.get("eyeHealthScore", 0),
+        "scoreLevel": result.get("scoreLevel", "Good"),
+        "faceDetected": result.get("faceDetected", False),
+        "risks": [],
+        "reminders": [],
+    }
+
+
+def reminder_event_from_alert(alert, metrics_snapshot):
+    timestamp_ms = int(time.time() * 1000)
+    reminder_type = alert.get("type", "face")
+    return {
+        "id": f"backend-reminder-{reminder_type}-{timestamp_ms}",
+        "userId": "backend",
+        "type": reminder_type,
+        "title": alert.get("message", "VisionGuard reminder"),
+        "message": alert.get("message", "Review your eye-care habit."),
+        "level": alert.get("level", "attention"),
+        "deliveryMethod": "card",
+        "cooldownMs": 0,
+        "triggeredAt": timestamp_ms,
+        "date": local_day_key_from_ms(timestamp_ms),
+        "metricsSnapshot": metrics_snapshot,
+    }
+
+
+def parse_ai_json_response(response_text: str) -> dict:
+    cleaned_text = response_text.strip()
+    cleaned_text = re.sub(r"^```(?:json)?\s*", "", cleaned_text, flags=re.IGNORECASE)
+    cleaned_text = re.sub(r"\s*```$", "", cleaned_text)
+
+    object_start = re.search(r"\{", cleaned_text)
+    if not object_start:
+        raise json.JSONDecodeError("No JSON object found in AI response", cleaned_text, 0)
+
+    candidate_text = cleaned_text[object_start.start():]
+    parsed_object, end_index = json.JSONDecoder().raw_decode(candidate_text)
+    json_object_text = candidate_text[:end_index]
+    return json.loads(json_object_text)
+
+
+def calculate_weighted_eye_health_score(
+    blink_rate,
+    distance_cm,
+    brightness_lux,
+    total_use_time_seconds,
+    avg_session_use_time_seconds,
+    face_detected,
+):
+    if not face_detected:
+        return 80
+
+    blink_score = 100 if blink_rate >= 12 else 70 if blink_rate >= 8 else 40 if blink_rate >= 4 else 20
+
+    if 50 <= distance_cm <= 100:
+        distance_score = 100
+    elif 40 <= distance_cm < 50 or 100 < distance_cm <= 120:
+        distance_score = 70
+    elif 30 <= distance_cm < 40:
+        distance_score = 40
+    else:
+        distance_score = 20
+
+    if 200 <= brightness_lux <= 750:
+        brightness_score = 100
+    elif 100 <= brightness_lux < 200 or 750 < brightness_lux <= 1000:
+        brightness_score = 70
+    else:
+        brightness_score = 40
+
+    time_load_seconds = (0.6 * total_use_time_seconds) + (0.4 * avg_session_use_time_seconds)
+    time_load_minutes = time_load_seconds / 60
+    if time_load_minutes <= 20:
+        time_score = 100
+    elif time_load_minutes <= 40:
+        time_score = 75
+    elif time_load_minutes <= 60:
+        time_score = 55
+    else:
+        time_score = 35
+
+    return max(0, min(100, round(
+        (0.35 * blink_score)
+        + (0.25 * distance_score)
+        + (0.20 * brightness_score)
+        + (0.20 * time_score)
+    )))
+
+
+def build_fallback_report(data: dict, error_message: str) -> dict:
+    score = data.get("eyeHealthScore") or 0
+    try:
+        score = int(round(float(score)))
+    except (TypeError, ValueError):
+        score = 0
+
+    risk_level = "low" if score >= 80 else "medium" if score >= 60 else "high"
+    return {
+        "summary": "VisionGuard generated a local fallback report because the AI report service was unavailable.",
+        "risk_level": risk_level,
+        "score": score,
+        "issues": ["AI report service was unavailable during this request."],
+        "recommendations": [
+            "Review your blink rate, viewing distance, lighting, and total use time trends.",
+            "Take regular 20-second breaks during longer focus sessions.",
+        ],
+        "score_explanation": f"Fallback generated from submitted metrics. Reason: {error_message}",
+        "session_use_time": data.get("session_use_time", data.get("sessionUseTimeSeconds", 0)),
+        "total_use_time": data.get("total_use_time", data.get("totalUseTimeSeconds", 0)),
+    }
+
+
 class EyeFatigueMonitor:
     def __init__(self):
         self.blink_count = 0
@@ -191,6 +341,10 @@ class EyeFatigueMonitor:
         self.last_blink_window_seconds = 0
         self.session_start_time = None
         self.last_frame_time = None
+        self.active_day_key = local_day_key()
+        self.total_use_time_seconds = 0.0
+        self.session_active_time_seconds = 0.0
+        self.daily_session_durations = []
         self.active_screen_time_seconds = 0.0
         self.continuous_use_time_seconds = 0.0
         self.break_duration_seconds = 0.0
@@ -209,8 +363,11 @@ class EyeFatigueMonitor:
             "brightnessLux": 0,
             "useTimeSeconds": 0,
             "sessionUseTimeSeconds": 0,
+            "totalUseTimeSeconds": 0,
+            "avgSessionUseTimeSeconds": 0,
             "activeScreenTimeSeconds": 0,
             "continuousUseTimeSeconds": 0,
+            "isCalibrating": True,
             "breakDurationSeconds": 0,
             "debugBackendScore": 0,
             "eyeHealthScore": 0,
@@ -492,10 +649,21 @@ class EyeFatigueMonitor:
 
         return frame
 
-    def update_use_time(self, face_detected):
+    def ensure_active_day(self):
+        current_day = local_day_key()
+        if self.active_day_key != current_day:
+            self.active_day_key = current_day
+            self.total_use_time_seconds = 0.0
+            self.daily_session_durations = []
+
+    def update_use_time(self, face_detected, is_calibrating):
         current_time = time.time()
-        if self.session_start_time is None:
-            self.session_start_time = current_time
+        self.ensure_active_day()
+
+        if is_calibrating:
+            self.last_frame_time = current_time
+            self.use_time_status = "normal"
+            return
 
         if self.last_frame_time is None:
             self.last_frame_time = current_time
@@ -506,6 +674,8 @@ class EyeFatigueMonitor:
         self.last_frame_time = current_time
 
         if face_detected:
+            if self.session_start_time is None:
+                self.session_start_time = current_time
             if self.no_face_since is not None:
                 self.break_duration_seconds = current_time - self.no_face_since
                 if self.break_duration_seconds >= 120:
@@ -513,6 +683,8 @@ class EyeFatigueMonitor:
                     self.completed_break = True
             self.no_face_since = None
             self.break_duration_seconds = 0
+            self.session_active_time_seconds += delta
+            self.total_use_time_seconds += delta
             self.active_screen_time_seconds += delta
             self.continuous_use_time_seconds += delta
         else:
@@ -526,12 +698,27 @@ class EyeFatigueMonitor:
         self.use_time_status = self.get_use_time_status(int(round(self.continuous_use_time_seconds)))
 
     def get_session_use_time_seconds(self):
-        if self.session_start_time is None:
+        return max(0, int(round(self.session_active_time_seconds)))
+
+    def get_avg_session_use_time_seconds(self):
+        active_sessions = [*self.daily_session_durations]
+        if self.session_active_time_seconds > 0:
+            active_sessions.append(self.session_active_time_seconds)
+        if not active_sessions:
             return 0
-        return max(0, int(round(time.time() - self.session_start_time)))
+        return int(round(sum(active_sessions) / len(active_sessions)))
 
     def reset_session(self):
+        self.ensure_active_day()
+        if self.session_active_time_seconds > 0:
+            self.daily_session_durations.append(self.session_active_time_seconds)
+        preserved_day_key = self.active_day_key
+        preserved_total = self.total_use_time_seconds
+        preserved_durations = [*self.daily_session_durations]
         self.__init__()
+        self.active_day_key = preserved_day_key
+        self.total_use_time_seconds = preserved_total
+        self.daily_session_durations = preserved_durations
 
     def encode_processed_frame(self, frame):
         success, buffer = cv2.imencode(
@@ -597,23 +784,27 @@ class EyeFatigueMonitor:
             annotated_frame = self.draw_face_box(annotated_frame, landmarks)
             annotated_frame = self.draw_eye_contours(annotated_frame, landmarks)
 
-        self.update_use_time(face_detected)
+        raw_blink_rate = int(round(self.update_blink_frequency()))
+        is_calibrating = face_detected and self.last_blink_window_seconds < 30
+        self.update_use_time(face_detected, is_calibrating)
         self.update_fps()
 
-        raw_blink_rate = int(round(self.update_blink_frequency()))
         blink_rate = self.update_smoothed_blink_rate(raw_blink_rate, face_detected)
         distance_cm = round(distance, 1) if face_detected else 0
         brightness_lux = int(round(brightness))
         session_use_time_seconds = self.get_session_use_time_seconds()
+        total_use_time_seconds = int(round(self.total_use_time_seconds))
+        avg_session_use_time_seconds = self.get_avg_session_use_time_seconds()
         active_screen_time_seconds = int(round(self.active_screen_time_seconds))
         continuous_use_time_seconds = int(round(self.continuous_use_time_seconds))
         break_duration_seconds = int(round(self.break_duration_seconds))
-        use_time_seconds = continuous_use_time_seconds
-        debug_backend_score = calculate_eye_health_score(
+        use_time_seconds = session_use_time_seconds
+        debug_backend_score = 80 if is_calibrating else calculate_weighted_eye_health_score(
             blink_rate=blink_rate,
             distance_cm=int(round(distance_cm)),
             brightness_lux=brightness_lux,
-            use_time_seconds=use_time_seconds,
+            total_use_time_seconds=total_use_time_seconds,
+            avg_session_use_time_seconds=avg_session_use_time_seconds,
             face_detected=face_detected,
         )
 
@@ -647,9 +838,12 @@ class EyeFatigueMonitor:
             "brightnessLux": brightness_lux,
             "useTimeSeconds": use_time_seconds,
             "sessionUseTimeSeconds": session_use_time_seconds,
+            "totalUseTimeSeconds": total_use_time_seconds,
+            "avgSessionUseTimeSeconds": avg_session_use_time_seconds,
             "activeScreenTimeSeconds": active_screen_time_seconds,
             "continuousUseTimeSeconds": continuous_use_time_seconds,
             "breakDurationSeconds": break_duration_seconds,
+            "isCalibrating": is_calibrating,
             "debugBackendScore": debug_backend_score,
             "eyeHealthScore": debug_backend_score,
             "scoreLevel": get_score_level(debug_backend_score),
@@ -676,9 +870,12 @@ class EyeFatigueMonitor:
             "brightnessLux": result["brightnessLux"],
             "useTimeSeconds": result["useTimeSeconds"],
             "sessionUseTimeSeconds": result["sessionUseTimeSeconds"],
+            "totalUseTimeSeconds": result["totalUseTimeSeconds"],
+            "avgSessionUseTimeSeconds": result["avgSessionUseTimeSeconds"],
             "activeScreenTimeSeconds": result["activeScreenTimeSeconds"],
             "continuousUseTimeSeconds": result["continuousUseTimeSeconds"],
             "breakDurationSeconds": result["breakDurationSeconds"],
+            "isCalibrating": result["isCalibrating"],
             "debugBackendScore": result["debugBackendScore"],
             "eyeHealthScore": result["eyeHealthScore"],
             "scoreLevel": result["scoreLevel"],
@@ -736,12 +933,99 @@ def analyze_frame():
     try:
         with monitor_lock:
             result = monitor.process_frame(image_base64)
+            if not result.get("isCalibrating"):
+                sample = metric_sample_from_result(result)
+                trend_samples.appendleft(sample)
+                for alert in result.get("alerts", []):
+                    trend_events.appendleft(reminder_event_from_alert(alert, sample))
         return jsonify(result)
     except Exception as error:
         return jsonify({
             "success": False,
             "error": f"Failed to analyze frame: {str(error)}",
         }), 400
+
+
+@app.route("/api/trend", methods=["GET"])
+def get_trend():
+    selected_date = request.args.get("date") or local_day_key()
+
+    try:
+        with monitor_lock:
+            samples = [
+                sample for sample in trend_samples
+                if sample.get("date") == selected_date and not sample.get("isCalibrating")
+            ]
+            events = [
+                event for event in trend_events
+                if event.get("date") == selected_date
+            ]
+
+        return jsonify({
+            "date": selected_date,
+            "samples": samples,
+            "events": events,
+        })
+    except Exception as error:
+        return jsonify({
+            "date": selected_date,
+            "samples": [],
+            "events": [],
+            "error": f"Failed to load trend data: {str(error)}",
+        }), 200
+
+
+@app.route("/api/report", methods=["POST"])
+def generate_ai_report():
+    data = request.get_json(silent=True) or {}
+
+    if data.get("isCalibrating"):
+        fallback_report = build_fallback_report(data, "Calibration data is excluded from AI reports")
+        return jsonify({
+            "source": "fallback",
+            "success": False,
+            "error": "Calibration data is excluded from AI reports",
+            "report": fallback_report,
+        }), 200
+
+    report_input = {
+        **data,
+        "session_use_time": data.get("session_use_time", data.get("sessionUseTimeSeconds", 0)),
+        "total_use_time": data.get("total_use_time", data.get("totalUseTimeSeconds", 0)),
+        "avg_session_use_time": data.get("avg_session_use_time", data.get("avgSessionUseTimeSeconds", 0)),
+    }
+
+    try:
+        response_text = call_llm(build_report_prompt(report_input))
+    except Exception as error:
+        fallback_report = build_fallback_report(report_input, str(error))
+        return jsonify({
+            "source": "fallback",
+            "success": False,
+            "error": f"AI report generation failed: {str(error)}",
+            "report": fallback_report,
+        }), 200
+
+    try:
+        report = parse_ai_json_response(response_text)
+    except json.JSONDecodeError as error:
+        fallback_report = build_fallback_report(report_input, "Invalid AI response")
+        return jsonify({
+            "source": "fallback",
+            "success": False,
+            "error": f"Invalid AI response: {str(error)}",
+            "report": fallback_report,
+            "raw": response_text,
+        }), 200
+
+    report["session_use_time"] = report_input["session_use_time"]
+    report["total_use_time"] = report_input["total_use_time"]
+
+    return jsonify({
+        "source": "openrouter",
+        "success": True,
+        "report": report,
+    })
 
 
 if __name__ == "__main__":

@@ -39,11 +39,7 @@ function averageOrNull(values: number[]) {
 }
 
 function sampleUseTimeSeconds(sample: MetricSample) {
-    return Math.max(
-        sample.activeScreenTimeSeconds ?? 0,
-        sample.continuousUseTimeSeconds ?? 0,
-        sample.useTimeSeconds ?? 0,
-    );
+    return sample.totalUseTimeSeconds ?? sample.activeScreenTimeSeconds ?? 0;
 }
 
 function mostCommonRisk(events: ReminderEvent[]) {
@@ -79,6 +75,71 @@ type TrendSummary = {
 type TrendPageProps = {
     onOpenSettings?: () => void;
 };
+
+type TrendDataState = {
+    samples: MetricSample[];
+    events: ReminderEvent[];
+};
+
+type TrendApiResponse = {
+    date: string;
+    samples: MetricSample[];
+    events: ReminderEvent[];
+};
+
+function trendStorageKey(date: string) {
+    return `visionguard_trend_${date}`;
+}
+
+function readTrendCache(date: string): TrendDataState | null {
+    try {
+        const rawValue = localStorage.getItem(trendStorageKey(date));
+        if (!rawValue) return null;
+        const parsedValue = JSON.parse(rawValue) as TrendDataState;
+
+        return {
+            samples: Array.isArray(parsedValue.samples) ? parsedValue.samples : [],
+            events: Array.isArray(parsedValue.events) ? parsedValue.events : [],
+        };
+    } catch {
+        return null;
+    }
+}
+
+function readLegacyTrendData(date: string, userId: string): TrendDataState {
+    return {
+        samples: readMetricSamples()
+            .filter((sample) => sample.userId === userId)
+            .filter((sample) => metricSampleDisplayDate(sample) === date)
+            .filter((sample) => !sample.isCalibrating),
+        events: readReminderEvents()
+            .filter((event) => event.userId === userId)
+            .filter((event) => reminderEventDisplayDate(event) === date),
+    };
+}
+
+function writeTrendCache(date: string, data: TrendDataState) {
+    try {
+        localStorage.setItem(trendStorageKey(date), JSON.stringify({
+            samples: data.samples.filter((sample) => !sample.isCalibrating),
+            events: data.events,
+        }));
+    } catch {
+        // Keep the in-memory response even if browser storage is full or blocked.
+    }
+}
+
+function readTrendDataForDates(dates: string[], userId: string) {
+    return dates.reduce<TrendDataState>((acc, date) => {
+        const cachedData = readTrendCache(date);
+        const dateData = cachedData ?? readLegacyTrendData(date, userId);
+
+        return {
+            samples: [...acc.samples, ...dateData.samples.filter((sample) => !sample.isCalibrating)],
+            events: [...acc.events, ...dateData.events],
+        };
+    }, { samples: [], events: [] });
+}
 
 function averageFromNullable(values: Array<number | null>) {
     const actualValues = values.filter((value): value is number => value !== null);
@@ -209,18 +270,62 @@ function MetricTrendChart({
 
 function TrendPage({ onOpenSettings }: TrendPageProps) {
     const [samples, setSamples] = useState<MetricSample[]>([]);
-    const [events, setEvents] = useState<ReminderEvent[]>([]);
+    const [, setEvents] = useState<ReminderEvent[]>([]);
+    const [trendData, setTrendData] = useState<TrendDataState | null>(null);
+    const [loading, setLoading] = useState(false);
     const [selectedDate, setSelectedDate] = useState(localDateKey());
     const [hasUserSelectedDate, setHasUserSelectedDate] = useState(false);
     const username = localStorage.getItem("visionguard_username") || "Katherine";
     const [debugUserId, setDebugUserId] = useState(getCurrentUserId());
     const dates = useMemo(lastSevenDates, []);
 
+    const setTrendState = (data: TrendDataState) => {
+        setSamples(data.samples);
+        setEvents(data.events);
+        setTrendData(data);
+    };
+
     const refreshTrendData = () => {
         const currentUserId = getCurrentUserId();
+        const fallbackData = readTrendDataForDates(dates, currentUserId);
+
         setDebugUserId(currentUserId);
-        setSamples(readMetricSamples().filter((sample) => sample.userId === currentUserId));
-        setEvents(readReminderEvents().filter((event) => event.userId === currentUserId));
+        setTrendState(fallbackData);
+    };
+
+    const fetchTrend = async (date: string) => {
+        setLoading(true);
+
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/trend?date=${date}`);
+            if (!response.ok) {
+                throw new Error(`Trend backend returned ${response.status}`);
+            }
+            const data = await response.json() as TrendApiResponse;
+            if (!Array.isArray(data.samples) || !Array.isArray(data.events)) {
+                throw new Error("Trend backend returned invalid data");
+            }
+
+            const apiTrendData = {
+                samples: data.samples.filter((sample) => !sample.isCalibrating),
+                events: [...data.events],
+            };
+
+            writeTrendCache(date, apiTrendData);
+            setTrendState({
+                samples: [...apiTrendData.samples],
+                events: [...apiTrendData.events],
+            });
+            console.log("Trend SOURCE:", "API");
+            console.log("Trend updated for date:", date);
+        } catch (error) {
+            console.warn("Trend backend fetch failed, using local trend data:", error);
+            refreshTrendData();
+            console.log("Trend SOURCE:", "LOCAL");
+            console.log("Trend updated for date:", date);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const migrateLocalDatesToLocalTimezone = () => {
@@ -240,19 +345,22 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
     };
 
     useEffect(() => {
-        refreshTrendData();
-        const intervalId = window.setInterval(refreshTrendData, 5000);
-        window.addEventListener("focus", refreshTrendData);
-        window.addEventListener("storage", refreshTrendData);
-        window.addEventListener("visionguard-storage-updated", refreshTrendData);
+        void fetchTrend(selectedDate);
+        const refreshSelectedTrend = () => {
+            void fetchTrend(selectedDate);
+        };
+        const intervalId = window.setInterval(refreshSelectedTrend, 5000);
+        window.addEventListener("focus", refreshSelectedTrend);
+        window.addEventListener("storage", refreshSelectedTrend);
+        window.addEventListener("visionguard-storage-updated", refreshSelectedTrend);
 
         return () => {
             window.clearInterval(intervalId);
-            window.removeEventListener("focus", refreshTrendData);
-            window.removeEventListener("storage", refreshTrendData);
-            window.removeEventListener("visionguard-storage-updated", refreshTrendData);
+            window.removeEventListener("focus", refreshSelectedTrend);
+            window.removeEventListener("storage", refreshSelectedTrend);
+            window.removeEventListener("visionguard-storage-updated", refreshSelectedTrend);
         };
-    }, []);
+    }, [selectedDate]);
 
     useEffect(() => {
         if (hasUserSelectedDate || samples.length === 0) return;
@@ -266,10 +374,14 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
         }
     }, [dates, hasUserSelectedDate, samples, selectedDate]);
 
+    const currentSamples = trendData?.samples ?? [];
+    const currentEvents = trendData?.events ?? [];
     const sevenDayDateSet = useMemo(() => new Set(dates), [dates]);
-    const sevenDayEvents = events.filter((event) => sevenDayDateSet.has(reminderEventDisplayDate(event)));
-    const selectedSamples = samples.filter((sample) => metricSampleDisplayDate(sample) === selectedDate);
-    const selectedEvents = events.filter((event) => reminderEventDisplayDate(event) === selectedDate);
+    const sevenDayEvents = currentEvents.filter((event) => sevenDayDateSet.has(reminderEventDisplayDate(event)));
+    const selectedSamples = currentSamples
+        .filter((sample) => metricSampleDisplayDate(sample) === selectedDate)
+        .filter((sample) => !sample.isCalibrating);
+    const selectedEvents = currentEvents.filter((event) => reminderEventDisplayDate(event) === selectedDate);
     const summary = {
         avgScore: average(selectedSamples.map((sample) => sample.eyeHealthScore)),
         totalUseTime: Math.max(0, ...selectedSamples.map(sampleUseTimeSeconds)),
@@ -283,8 +395,10 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
         count: sevenDayEvents.filter((event) => event.type === type).length,
     }));
     const sevenDayRows = dates.map((date) => {
-        const daySamples = samples.filter((sample) => metricSampleDisplayDate(sample) === date);
-        const dayEvents = events.filter((event) => reminderEventDisplayDate(event) === date);
+        const daySamples = currentSamples
+            .filter((sample) => metricSampleDisplayDate(sample) === date)
+            .filter((sample) => !sample.isCalibrating);
+        const dayEvents = currentEvents.filter((event) => reminderEventDisplayDate(event) === date);
 
         return {
             date,
@@ -302,19 +416,9 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
         selectedEvents: sevenDayEvents,
         summary,
     });
-    const latestSample = [...samples].sort((a, b) => b.timestamp - a.timestamp)[0];
-    const latestEvent = [...events].sort((a, b) => b.triggeredAt - a.triggeredAt)[0];
+    const latestSample = [...currentSamples].sort((a, b) => b.timestamp - a.timestamp)[0];
+    const latestEvent = [...currentEvents].sort((a, b) => b.triggeredAt - a.triggeredAt)[0];
     const hasSevenDaySamples = sevenDayRows.some((row) => row.score !== null);
-
-    const clearLocalDemoData = () => {
-        localStorage.removeItem("visionguard_metric_samples");
-        localStorage.removeItem("visionguard_daily_summaries");
-        localStorage.removeItem("visionguard_reminder_events");
-        sessionStorage.removeItem("visionguard_sustained_state");
-        localStorage.removeItem("visionguard_card_reminder_cooldowns");
-        localStorage.removeItem("visionguard_reminder_cooldowns");
-        refreshTrendData();
-    };
 
     return (
         <div className="dashboard-shell">
@@ -331,9 +435,6 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
                                 <h2>How to read your trends</h2>
                                 <p className="panel-helper">VisionGuard summarizes your screen-use habits from four signals.</p>
                             </div>
-                            <button className="secondary-button compact-action" onClick={clearLocalDemoData} type="button">
-                                Clear Local Demo Data
-                            </button>
                             <button className="secondary-button compact-action" onClick={migrateLocalDatesToLocalTimezone} type="button">
                                 Fix Local Dates
                             </button>
@@ -391,6 +492,7 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
                                 <h2>{selectedDate}</h2>
                                 <p className="panel-helper">Samples and reminder events for the selected date only.</p>
                             </div>
+                            {loading && <span className="status-badge neutral-status">Updating...</span>}
                         </div>
 
                         <div className="date-chip-row" aria-label="Select trend date">
@@ -552,8 +654,8 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
                     <section className="trend-debug-panel">
                         <strong>Debug</strong>
                         <span>currentUserId: {debugUserId}</span>
-                        <span>totalSamples: {samples.length}</span>
-                        <span>totalEvents: {events.length}</span>
+                        <span>totalSamples: {currentSamples.length}</span>
+                        <span>totalEvents: {currentEvents.length}</span>
                         <span>selectedDate: {selectedDate}</span>
                         <span>selectedSamples: {selectedSamples.length}</span>
                         <span>selectedEvents: {selectedEvents.length}</span>

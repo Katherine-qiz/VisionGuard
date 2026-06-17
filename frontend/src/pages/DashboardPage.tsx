@@ -29,7 +29,7 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
         level === "good" ? "Good" : level === "attention" ? "Attention" : "Warning";
     const blinkStatus = (metrics.blinkWindowSeconds ?? 0) < 30 ? "Calibrating" : statusLabel(riskByType("blink")?.level);
     const blinkStatusType = (metrics.blinkWindowSeconds ?? 0) < 30 ? "attention" : riskByType("blink")?.level ?? "warning";
-    const continuousUseTimeSeconds = metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds;
+    const sessionUseTimeSeconds = metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds;
 
     return (
         <div className="dashboard-shell">
@@ -87,7 +87,7 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                         <MetricCard
                             icon="⏱"
                             title="Use Time"
-                            value={Math.round(continuousUseTimeSeconds / 60)}
+                            value={Math.round(sessionUseTimeSeconds / 60)}
                             unit="min"
                             status={statusLabel(riskByType("use_time")?.level)}
                             statusType={riskByType("use_time")?.level ?? "warning"}
