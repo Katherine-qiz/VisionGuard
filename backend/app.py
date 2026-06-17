@@ -1,6 +1,10 @@
 import base64
+import json
+import os
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections import deque
 
 import cv2
@@ -8,9 +12,11 @@ import mediapipe as mp
 import numpy as np
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)
+load_dotenv()
 
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
@@ -171,6 +177,139 @@ def get_base64_payload(image_base64: str) -> str:
         return image_base64.split(",", 1)[1].strip()
 
     return image_base64.strip()
+
+
+def parse_json_report(text: str):
+    cleaned = text.strip()
+    cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        object_start = cleaned.find("{")
+        object_end = cleaned.rfind("}")
+        if object_start == -1 or object_end == -1 or object_end <= object_start:
+            raise
+
+        return json.loads(cleaned[object_start:object_end + 1])
+
+
+report_metrics_history = deque(maxlen=20)
+
+
+def normalize_report(report):
+    return {
+        "summary": report.get("summary", ""),
+        "trendInsight": report.get("trendInsight", ""),
+        "riskLevel": report.get("riskLevel", report.get("risk_level", "medium")),
+        "score": report.get("score", 0),
+        "keyFindings": report.get("keyFindings", []),
+        "behaviorTrends": report.get("behaviorTrends", []),
+        "fatigueAnalysis": report.get("fatigueAnalysis", []),
+        "recommendations": report.get("recommendations", report.get("suggestions", [])),
+    }
+
+
+def average_metric(samples, key):
+    values = [sample.get(key) for sample in samples if isinstance(sample.get(key), (int, float))]
+    if not values:
+        return None
+    return round(sum(values) / len(values), 1)
+
+
+def fatigue_trend_from_samples(samples):
+    scores = [sample.get("eyeHealthScore") for sample in samples if isinstance(sample.get("eyeHealthScore"), (int, float))]
+    if len(scores) < 2:
+        return "insufficient_history"
+
+    first_half = scores[:max(1, len(scores) // 2)]
+    second_half = scores[max(1, len(scores) // 2):]
+    first_avg = sum(first_half) / len(first_half)
+    second_avg = sum(second_half) / len(second_half)
+
+    if second_avg < first_avg - 3:
+        return "worsening"
+    if second_avg > first_avg + 3:
+        return "improving"
+    return "stable"
+
+
+def build_report_context(metrics, request_data):
+    request_samples = request_data.get("recentSamples")
+    recent_samples = request_samples if isinstance(request_samples, list) else []
+    combined_samples = [*recent_samples, *list(report_metrics_history)]
+
+    return {
+        "currentMetrics": metrics,
+        "historicalSummary": {
+            "sampleCount": len(combined_samples),
+            "averageBlinkRate": average_metric(combined_samples, "blinkRate"),
+            "averageScreenTimeSeconds": average_metric(combined_samples, "useTimeSeconds"),
+            "averageEyeHealthScore": average_metric(combined_samples, "eyeHealthScore"),
+            "fatigueTrend": fatigue_trend_from_samples(combined_samples),
+        },
+        "recentSamples": combined_samples[-8:],
+    }
+
+
+def call_deepseek_report(report_context):
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise RuntimeError("DEEPSEEK_API_KEY is not configured")
+
+    user_prompt = (
+        "Analyze this VisionGuard eye-use context with current metrics and recent historical patterns:\n"
+        f"{json.dumps(report_context, ensure_ascii=False)}\n\n"
+        "Return ONLY valid JSON in this format:\n"
+        "{\n"
+        '  "summary": string,\n'
+        '  "trendInsight": string,\n'
+        '  "riskLevel": "low | medium | high",\n'
+        '  "score": number,\n'
+        '  "keyFindings": string[],\n'
+        '  "behaviorTrends": string[],\n'
+        '  "fatigueAnalysis": string[],\n'
+        '  "recommendations": string[]\n'
+        "}"
+    )
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a professional eye health AI assistant embedded in a digital health product.\n\n"
+                    "You MUST:\n"
+                    "- Analyze both current + historical eye usage patterns\n"
+                    "- Provide behavioral trend insights\n"
+                    "- Detect fatigue progression\n"
+                    "- Give personalized recommendations based on patterns\n"
+                    "- Use clear, structured, human-friendly language\n\n"
+                    "Avoid generic advice. Be specific, contextual, and personalized.\n\n"
+                    "Your output should feel like Apple Health + ChatGPT hybrid health coach.\n"
+                    "Return ONLY strict valid JSON. No markdown. No code blocks. No explanations. No extra text."
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.3,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.deepseek.com/v1/chat/completions",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+
+    print("🔥 CALLING DEEPSEEK")
+    with urllib.request.urlopen(req, timeout=30) as response:
+        response_body = response.read().decode("utf-8")
+        response_json = json.loads(response_body)
+        return response_json["choices"][0]["message"]["content"]
 
 
 class EyeFatigueMonitor:
@@ -742,6 +881,44 @@ def analyze_frame():
             "success": False,
             "error": f"Failed to analyze frame: {str(error)}",
         }), 400
+
+
+@app.route("/api/report/generate", methods=["POST"])
+def generate_report():
+    print("🔥 REPORT API CALLED")
+    data = request.get_json(silent=True) or {}
+    metrics = {
+        "blinkRate": data.get("blinkRate"),
+        "distanceCm": data.get("distanceCm"),
+        "brightnessLux": data.get("brightnessLux"),
+        "useTimeSeconds": data.get("useTimeSeconds"),
+        "eyeHealthScore": data.get("eyeHealthScore"),
+    }
+    report_context = build_report_context(metrics, data)
+
+    try:
+        raw_output = call_deepseek_report(report_context)
+    except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, KeyError, json.JSONDecodeError) as error:
+        return jsonify({
+            "success": False,
+            "error": str(error),
+        }), 200
+
+    try:
+        report = normalize_report(parse_json_report(raw_output))
+    except json.JSONDecodeError:
+        return jsonify({
+            "success": False,
+            "raw": raw_output,
+            "error": "parse_failed",
+        }), 200
+
+    report_metrics_history.append(metrics)
+
+    return jsonify({
+        "success": True,
+        "report": report,
+    })
 
 
 if __name__ == "__main__":
