@@ -455,8 +455,17 @@ def call_deepseek_report(report_context):
     )
 
     print("🔥 CALLING DEEPSEEK")
+    print("CALLING DEEPSEEK")
+    print("REPORT CONTEXT SUMMARY:", json.dumps({
+        "currentMetrics": report_context.get("currentMetrics"),
+        "historicalSummary": report_context.get("historicalSummary"),
+        "recentSampleCount": len(report_context.get("recentSamples", [])),
+    }, ensure_ascii=False))
+    print("DEEPSEEK PROMPT SUMMARY:", user_prompt[:1000])
     with urllib.request.urlopen(req, timeout=30) as response:
         response_body = response.read().decode("utf-8")
+        print("DEEPSEEK HTTP STATUS:", response.status)
+        print("DEEPSEEK RAW RESPONSE:", response_body[:1000])
         response_json = json.loads(response_body)
         return response_json["choices"][0]["message"]["content"]
 
@@ -1169,7 +1178,9 @@ def generate_ai_report():
 @app.route("/api/report/generate", methods=["POST"])
 def generate_report():
     print("🔥 REPORT API CALLED")
+    print("REPORT API CALLED")
     data = request.get_json(silent=True) or {}
+    print("REPORT REQUEST JSON:", data)
     metrics = {
         "blinkRate": data.get("blinkRate"),
         "distanceCm": data.get("distanceCm"),
@@ -1182,6 +1193,12 @@ def generate_report():
     try:
         raw_output = call_deepseek_report(report_context)
     except (urllib.error.URLError, urllib.error.HTTPError, RuntimeError, KeyError, json.JSONDecodeError) as error:
+        print("DEEPSEEK CALL FAILED TYPE:", type(error).__name__)
+        print("DEEPSEEK CALL FAILED MESSAGE:", str(error))
+        print("REPORT RESPONSE TO FRONTEND", {
+            "success": False,
+            "error": str(error),
+        })
         return jsonify({
             "success": False,
             "error": str(error),
@@ -1190,6 +1207,11 @@ def generate_report():
     try:
         report = normalize_report(parse_json_report(raw_output))
     except json.JSONDecodeError:
+        print("REPORT RESPONSE TO FRONTEND", {
+            "success": False,
+            "error": "parse_failed",
+            "rawPreview": raw_output[:300],
+        })
         return jsonify({
             "success": False,
             "raw": raw_output,
@@ -1197,6 +1219,12 @@ def generate_report():
         }), 200
 
     report_metrics_history.append(metrics)
+    print("REPORT RESPONSE TO FRONTEND", {
+        "success": True,
+        "reportFields": list(report.keys()),
+        "riskLevel": report.get("riskLevel"),
+        "score": report.get("score"),
+    })
 
     return jsonify({
         "success": True,

@@ -8,6 +8,7 @@ import RegisterPage from "./pages/RegisterPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import DashboardPage from "./pages/DashboardPage";
 import TrendPage from "./pages/TrendPage";
+import ReportPage from "./pages/ReportPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import SettingsModal from "./components/SettingsModal";
 import { MonitoringProvider } from "./context/MonitoringContext";
@@ -36,17 +37,7 @@ function App() {
               />
             )}
           />
-          <Route
-            path="/ai-report"
-            element={(
-              <PlaceholderPage
-                eyebrow="AI Report"
-                title="Structured eye-care report"
-                description="A focused report area for summarizing sessions, risks, and practical suggestions."
-                onOpenSettings={openSettings}
-              />
-            )}
-          />
+          <Route path="/ai-report" element={<ReportPage onOpenSettings={openSettings} />} />
           <Route path="/trend" element={<TrendPage onOpenSettings={openSettings} />} />
           <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
