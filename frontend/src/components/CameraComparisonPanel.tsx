@@ -39,7 +39,7 @@ function CameraComparisonPanel() {
             <div className="panel-header">
                 <div>
                     <p className="eyebrow">Camera Analysis</p>
-                    <h2>Raw input to backend processing</h2>
+                    <h2>Real-time Eye-use Monitoring</h2>
                 </div>
                 <span className="status-badge active-status">
                     {isMonitoring ? "Monitoring" : "Standby"}
@@ -49,8 +49,11 @@ function CameraComparisonPanel() {
             <div className="camera-comparison">
                 <article className="camera-card">
                     <div className="camera-card-header">
-                        <span>Raw Camera Feed</span>
-                        <span className="status-badge neutral-status">Original input</span>
+                        <div className="camera-card-title-group">
+                            <span>Live Camera</span>
+                            <small>Your local camera preview</small>
+                        </div>
+                        <span className="status-badge neutral-status">Active</span>
                     </div>
 
                     <div className="camera-preview raw-preview">
@@ -71,19 +74,22 @@ function CameraComparisonPanel() {
                     </div>
 
                     <p className="camera-note">
-                        Raw frames are processed in real time and are not stored.
+                        Your camera preview stays local while VisionGuard checks eye-use patterns.
                     </p>
                 </article>
 
-                <div className="processing-step" aria-label="Backend computer vision processing">
-                    <span>Backend CV</span>
-                    <span>Processing</span>
+                <div className="processing-step" aria-label="VisionGuard eye behavior analysis">
+                    <span>Tracking eye</span>
+                    <span>behavior</span>
                     <strong>→</strong>
                 </div>
 
                 <article className="camera-card">
                     <div className="camera-card-header">
-                        <span>Processed by Backend</span>
+                        <div className="camera-card-title-group">
+                            <span>Vision Analysis</span>
+                            <small>Real-time eye and face tracking</small>
+                        </div>
                         <span className="status-badge ai-status">Computer vision</span>
                     </div>
 
@@ -92,7 +98,7 @@ function CameraComparisonPanel() {
                             <img
                                 className="processed-frame"
                                 src={processedFrame}
-                                alt="Processed camera frame"
+                                alt="Vision analysis camera frame"
                             />
                         ) : (
                             <div className="processed-avatar" aria-hidden="true">
@@ -120,11 +126,11 @@ function CameraComparisonPanel() {
                     onClick={startMonitoring}
                     type="button"
                 >
-                    {isStarting ? "Starting..." : isMonitoring ? "Monitoring" : "Start Monitoring"}
+                    {isStarting ? "Starting..." : isMonitoring ? "Monitoring" : "Start monitoring"}
                 </button>
 
                 <button className="secondary-button" onClick={stopMonitoring} type="button">
-                    Stop
+                    Pause monitoring
                 </button>
             </div>
 

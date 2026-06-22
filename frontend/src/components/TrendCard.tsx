@@ -17,9 +17,12 @@ function TrendCard() {
         ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
         : null;
     const weeklyReminderCount = viewModel.riskBreakdown7Days.reduce((sum, risk) => sum + risk.count, 0);
+    const mainRisk = viewModel.riskBreakdown7Days
+        .filter((risk) => risk.count > 0)
+        .sort((a, b) => b.count - a.count)[0]?.type;
     const hasData = scores.length > 0;
     const trendNote = hasData
-        ? `7-day average score ${averageScore}. ${weeklyReminderCount} reminders this week.`
+        ? `7-day average score ${averageScore}. ${weeklyReminderCount} reminders this week. Main risk: ${mainRisk ?? "stable pattern"}.`
         : "Start monitoring to build your trend.";
 
     useEffect(() => {

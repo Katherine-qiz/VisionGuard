@@ -295,10 +295,23 @@ label {
 }
 
 .nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 13px 14px;
   border-radius: 10px;
   color: #cbd5e1;
   white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.nav-icon {
+  width: 22px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  transition: all 0.18s ease;
 }
 
 .nav-button {
@@ -310,14 +323,33 @@ label {
   cursor: pointer;
 }
 
+.nav-item:hover,
 .nav-button:hover {
-  color: #ffffff;
-  background: rgba(96, 165, 250, 0.12);
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.14);
+  transform: translateX(2px);
+}
+
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon {
+  transform: scale(1.08);
 }
 
 .nav-item.active {
-  background: rgba(96, 165, 250, 0.18);
+  background: rgba(96, 165, 250, 0.2);
   color: #ffffff;
+  font-weight: 700;
+}
+
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: #60a5fa;
 }
 
 .nav-item.disabled {
@@ -505,14 +537,14 @@ label {
 .metrics-grid {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
   gap: 16px;
 }
 
 .dashboard-bottom-grid {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 24px;
   align-items: stretch;
 }
@@ -545,11 +577,10 @@ label {
 
 .camera-card-header {
   min-width: 0;
-  min-height: 32px;
+  min-height: 54px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
   font-size: 14px;
@@ -557,13 +588,31 @@ label {
   white-space: normal;
 }
 
-.camera-card-header>span:first-child {
+.camera-card-title-group {
   min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.camera-card-title-group>span {
+  color: #111827;
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
   word-wrap: break-word;
   overflow-wrap: anywhere;
+}
+
+.camera-card-title-group>small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.camera-card-header .status-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .camera-placeholder {
@@ -841,8 +890,8 @@ label {
 .camera-actions .primary-button,
 .camera-actions .secondary-button,
 .report-footer .primary-button {
-  width: 144px;
-  min-width: 144px;
+  width: 170px;
+  min-width: 170px;
   height: 44px;
   padding: 0 16px;
 }
@@ -1003,6 +1052,66 @@ label {
   background: #ffffff;
   display: flex;
   flex-direction: column;
+}
+
+.ai-report-entry-card {
+  min-width: 0;
+}
+
+.ai-report-entry-card .panel-header {
+  align-items: flex-start;
+}
+
+.ai-report-entry-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+  gap: 18px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.ai-report-entry-copy {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.82);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.ai-report-entry-copy p {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.ai-report-entry-copy ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-report-entry-copy li {
+  margin: 6px 0;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.ai-report-entry-status {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(219, 227, 239, 0.82);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 800;
+}
+
+.ai-report-entry-status span {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ai-report-card-content,
@@ -2333,6 +2442,12 @@ label {
 
 /* Responsive */
 
+@media (max-width: 1400px) {
+  .metrics-grid {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+  }
+}
+
 @media (max-width: 1280px) {
   .dashboard-hero-grid {
     grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
@@ -2346,6 +2461,10 @@ label {
 @media (max-width: 1100px) {
   .dashboard-hero-grid,
   .dashboard-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-report-entry-body {
     grid-template-columns: 1fr;
   }
 

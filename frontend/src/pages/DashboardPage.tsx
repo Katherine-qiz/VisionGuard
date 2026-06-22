@@ -82,7 +82,7 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             unit="cm"
                             status={metricStatus("distance")}
                             statusType={statusType("distance")}
-                            helper={metricHelper("Current live distance")}
+                            helper={metricHelper("Current viewing distance")}
                         />
 
                         <MetricCard
@@ -92,7 +92,7 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             unit="lux"
                             status={metricStatus("brightness")}
                             statusType={statusType("brightness")}
-                            helper={metricHelper("Current camera-estimated light")}
+                            helper={metricHelper("Estimated room brightness")}
                         />
 
                         <MetricCard
@@ -102,7 +102,7 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             unit="min"
                             status={metricStatus("use_time")}
                             statusType={statusType("use_time")}
-                            helper={metricHelper("Continuous focus time")}
+                            helper={metricHelper("Current focus session")}
                         />
 
                         <MetricCard
@@ -112,7 +112,7 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             unit="min"
                             status={todayTotalStatus}
                             statusType="good"
-                            helper="Tracked for report and trend"
+                            helper="Tracked screen time today"
                         />
                     </section>
 

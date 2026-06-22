@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const navItems = [
-    { label: "Dashboard", to: "/dashboard" },
-    { label: "AI Report", to: "/ai-report" },
-    { label: "Trend", to: "/trend" },
+    { icon: "📊", label: "Dashboard", to: "/dashboard" },
+    { icon: "✨", label: "AI Report", to: "/ai-report" },
+    { icon: "📈", label: "Trend", to: "/trend" },
 ];
 
 type SidebarProps = {
@@ -100,17 +100,20 @@ function Sidebar({ onOpenSettings }: SidebarProps) {
                             key={item.to}
                             to={item.to}
                         >
-                            {item.label}
+                            <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                            <span>{item.label}</span>
                         </Link>
                     ))}
                     <button className="nav-item nav-button" onClick={onOpenSettings} type="button">
-                        Settings
+                        <span className="nav-icon" aria-hidden="true">⚙️</span>
+                        <span>Settings</span>
                     </button>
                 </nav>
 
                 <div className="sidebar-footer">
                     <button className="nav-item nav-button" onClick={() => setLogoutOpen(true)} type="button">
-                        Logout
+                        <span className="nav-icon" aria-hidden="true">↪</span>
+                        <span>Logout</span>
                     </button>
                 </div>
             </aside>
