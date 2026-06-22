@@ -1,21 +1,35 @@
 import type { EyeMetrics } from "../types/metrics";
 import type { Reminder, ReminderEvent } from "../types/reminder";
 import { localDateKey } from "./dateUtils";
+import {
+    appendReminderEvent,
+    readReminderEvents as readSharedReminderEvents,
+    STORAGE_KEYS,
+} from "./localData";
 
-export const REMINDER_EVENTS_KEY = "visionguard_reminder_events";
-const MAX_EVENTS = 200;
+export const REMINDER_EVENTS_KEY = STORAGE_KEYS.reminderEvents;
 
 export function readReminderEvents(): ReminderEvent[] {
-    try {
-        const rawValue = localStorage.getItem(REMINDER_EVENTS_KEY);
-        return rawValue ? JSON.parse(rawValue) as ReminderEvent[] : [];
-    } catch {
-        return [];
-    }
+    return readSharedReminderEvents();
 }
 
 export function reminderEventDisplayDate(event: ReminderEvent) {
     return localDateKey(event.triggeredAt);
+}
+
+function compactMetricsSnapshot(metrics: EyeMetrics): ReminderEvent["metricsSnapshot"] {
+    return {
+        eyeHealthScore: metrics.eyeHealthScore,
+        scoreLevel: metrics.scoreLevel,
+        blinkRate: metrics.blinkRate,
+        distanceCm: metrics.distanceCm,
+        brightnessLux: metrics.brightnessLux,
+        sessionUseTimeSeconds: metrics.sessionUseTimeSeconds,
+        totalUseTimeSeconds: metrics.totalUseTimeSeconds,
+        continuousUseTimeSeconds: metrics.continuousUseTimeSeconds,
+        faceDetected: metrics.faceDetected,
+        isCalibrating: metrics.isCalibrating,
+    };
 }
 
 export function saveReminderEvent(
@@ -29,21 +43,10 @@ export function saveReminderEvent(
         userId,
         triggeredAt,
         date: localDateKey(triggeredAt),
-        metricsSnapshot,
+        metricsSnapshot: compactMetricsSnapshot(metricsSnapshot),
     };
 
-    try {
-        const events = readReminderEvents();
-        localStorage.setItem(
-            REMINDER_EVENTS_KEY,
-            JSON.stringify([event, ...events].slice(0, MAX_EVENTS)),
-        );
-        window.dispatchEvent(new Event("visionguard-storage-updated"));
-    } catch {
-        // Ignore storage failures for the local MVP.
-    }
-
-    return event;
+    return appendReminderEvent(event);
 }
 
 export function reminderEventsForDate(date: string) {

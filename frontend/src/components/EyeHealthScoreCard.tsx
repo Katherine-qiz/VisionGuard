@@ -13,12 +13,12 @@ type EyeHealthScoreCardProps = {
 
 function EyeHealthScoreCard({
     score,
-    level = "Healthy",
+    level = "Good",
     metrics,
     feedback,
 }: EyeHealthScoreCardProps) {
     const scoreStatusType =
-        level === "Healthy" || level === "Good"
+        level === "Good"
             ? "good"
             : level === "Attention"
               ? "attention"

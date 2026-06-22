@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useMonitoring } from "../context/MonitoringContext";
 
 import Sidebar from "../components/Sidebar";
@@ -20,16 +22,25 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
         riskResult,
         cardReminders,
     } = useMonitoring();
+    const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
     const username = localStorage.getItem("visionguard_username") || "Katherine";
-    const visibleReminders = isMonitoring ? cardReminders : [];
+    const isCalibrating = metrics.isCalibrating === true;
+    const visibleReminders = isMonitoring
+        ? (cardReminders.length > 0 ? cardReminders : riskResult.reminders)
+        : [];
     const riskByType = (type: "blink" | "distance" | "brightness" | "use_time") =>
         riskResult.risks.find((risk) => risk.type === type);
     const statusLabel = (level?: "good" | "attention" | "warning") =>
-        level === "good" ? "Good" : level === "attention" ? "Attention" : "Warning";
-    const blinkStatus = (metrics.blinkWindowSeconds ?? 0) < 30 ? "Calibrating" : statusLabel(riskByType("blink")?.level);
-    const blinkStatusType = (metrics.blinkWindowSeconds ?? 0) < 30 ? "attention" : riskByType("blink")?.level ?? "warning";
+        level === "attention" ? "Attention" : level === "warning" ? "Warning" : "Good";
+    const statusType = (type: "blink" | "distance" | "brightness" | "use_time") =>
+        isCalibrating ? "attention" : riskByType(type)?.level ?? "good";
+    const metricStatus = (type: "blink" | "distance" | "brightness" | "use_time") =>
+        isCalibrating ? "Calibrating" : statusLabel(riskByType(type)?.level);
+    const metricHelper = (fallback: string) => isCalibrating ? "Collecting baseline data" : fallback;
     const sessionUseTimeSeconds = metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds;
+    const todayTotalUseTimeSeconds = metrics.totalUseTimeSeconds ?? metrics.activeScreenTimeSeconds ?? 0;
+    const todayTotalStatus = isMonitoring ? "Tracking" : "Recorded";
 
     return (
         <div className="dashboard-shell">
@@ -59,9 +70,9 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             title="Blink Rate"
                             value={metrics.blinkRate}
                             unit="/ min"
-                            status={blinkStatus}
-                            statusType={blinkStatusType}
-                            helper="Recent 60s estimate"
+                            status={metricStatus("blink")}
+                            statusType={statusType("blink")}
+                            helper={metricHelper("Recent 60s estimate")}
                         />
 
                         <MetricCard
@@ -69,9 +80,9 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             title="Viewing Distance"
                             value={metrics.distanceCm}
                             unit="cm"
-                            status={statusLabel(riskByType("distance")?.level)}
-                            statusType={riskByType("distance")?.level ?? "warning"}
-                            helper="Current live distance"
+                            status={metricStatus("distance")}
+                            statusType={statusType("distance")}
+                            helper={metricHelper("Current live distance")}
                         />
 
                         <MetricCard
@@ -79,9 +90,9 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             title="Brightness"
                             value={metrics.brightnessLux}
                             unit="lux"
-                            status={statusLabel(riskByType("brightness")?.level)}
-                            statusType={riskByType("brightness")?.level ?? "warning"}
-                            helper="Current camera-estimated light"
+                            status={metricStatus("brightness")}
+                            statusType={statusType("brightness")}
+                            helper={metricHelper("Current camera-estimated light")}
                         />
 
                         <MetricCard
@@ -89,25 +100,49 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
                             title="Use Time"
                             value={Math.round(sessionUseTimeSeconds / 60)}
                             unit="min"
-                            status={statusLabel(riskByType("use_time")?.level)}
-                            statusType={riskByType("use_time")?.level ?? "warning"}
-                            helper="Continuous focus time"
+                            status={metricStatus("use_time")}
+                            statusType={statusType("use_time")}
+                            helper={metricHelper("Continuous focus time")}
+                        />
+
+                        <MetricCard
+                            icon="📊"
+                            title="Today Total"
+                            value={Math.round(todayTotalUseTimeSeconds / 60)}
+                            unit="min"
+                            status={todayTotalStatus}
+                            statusType="good"
+                            helper="Tracked for report and trend"
                         />
                     </section>
 
-                    <section className="metric-debug-row" aria-label="Blink detection diagnostics">
-                        <span>Session Blinks: {metrics.blinkCount}</span>
-                        <span>Recent Rate: {metrics.blinkRate}</span>
-                        <span>Raw: {metrics.rawBlinkRate ?? 0}</span>
-                        <span>Smoothed: {metrics.smoothedBlinkRate ?? metrics.blinkRate}</span>
-                        <span>Session: {Math.round((metrics.sessionUseTimeSeconds ?? 0) / 60)}m</span>
-                        <span>Active: {Math.round((metrics.activeScreenTimeSeconds ?? 0) / 60)}m</span>
-                        <span>Break: {metrics.breakDurationSeconds ?? 0}s</span>
-                        <span>EAR: {metrics.ear.toFixed(3)}</span>
-                        <span>Baseline: {metrics.earBaseline.toFixed(3)}</span>
-                        <span>Blink Window: {metrics.blinkWindowSeconds ?? 0}s</span>
-                        <span>Events in Window: {metrics.blinkEventsInWindow ?? 0}</span>
-                        <span>{metrics.isBlinking ? "Blinking" : "Eyes open"}</span>
+                    <section className="metric-debug-row" aria-label="Technical diagnostics">
+                        <button
+                            className="text-link-button"
+                            onClick={() => setShowTechnicalDetails((isVisible) => !isVisible)}
+                            type="button"
+                        >
+                            {showTechnicalDetails ? "Hide technical details" : "Show technical details"}
+                        </button>
+
+                        {showTechnicalDetails && (
+                            <>
+                                <span>rawBlinkRate: {metrics.rawBlinkRate ?? 0}</span>
+                                <span>smoothedBlinkRate: {metrics.smoothedBlinkRate ?? metrics.blinkRate}</span>
+                                <span>EAR: {metrics.ear.toFixed(3)}</span>
+                                <span>Baseline: {metrics.earBaseline.toFixed(3)}</span>
+                                <span>blinkWindowSeconds: {metrics.blinkWindowSeconds ?? 0}</span>
+                                <span>snapshotScore: {riskResult.signalScores.snapshotScore}</span>
+                                <span>liveBehaviorScore: {riskResult.signalScores.liveBehaviorScore}</span>
+                                <span>blinkMetricScore: {riskResult.signalScores.blinkScore}</span>
+                                <span>distanceMetricScore: {riskResult.signalScores.distanceScore}</span>
+                                <span>brightnessMetricScore: {riskResult.signalScores.brightnessScore}</span>
+                                <span>sessionTimeMetricScore: {riskResult.signalScores.sessionTimeScore}</span>
+                                <span>dailyLoadScore: {riskResult.signalScores.dailyLoadScore}</span>
+                                <span>dailyScore: {riskResult.score}</span>
+                                <span>lastSettlementAt: {riskResult.sustainedState.lastSettlementAt ? new Date(riskResult.sustainedState.lastSettlementAt).toLocaleTimeString() : "pending"}</span>
+                            </>
+                        )}
                     </section>
 
                     <section className="dashboard-bottom-grid">

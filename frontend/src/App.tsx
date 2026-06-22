@@ -9,6 +9,7 @@ import PrivacyPage from "./pages/PrivacyPage";
 import DashboardPage from "./pages/DashboardPage";
 import TrendPage from "./pages/TrendPage";
 import ReportPage from "./pages/ReportPage";
+import SettingsPage from "./pages/SettingsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import SettingsModal from "./components/SettingsModal";
 import { MonitoringProvider } from "./context/MonitoringContext";
@@ -39,7 +40,7 @@ function App() {
           />
           <Route path="/ai-report" element={<ReportPage onOpenSettings={openSettings} />} />
           <Route path="/trend" element={<TrendPage onOpenSettings={openSettings} />} />
-          <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

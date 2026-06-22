@@ -1,13 +1,52 @@
+import { useEffect, useMemo, useState } from "react";
+
 import type { Reminder } from "../types/reminder";
+import { readReminderEvents } from "../utils/reminderStorage";
+import { subscribeLocalData } from "../utils/localData";
 
 type ReminderListProps = {
     reminders: Reminder[];
 };
 
+type VisibleReminder = Reminder & {
+    triggeredAt: number;
+};
+
+const RECENT_REMINDER_WINDOW_MS = 30 * 60 * 1000;
+
 function ReminderList({ reminders }: ReminderListProps) {
-    const visibleReminders = reminders.length > 0
-        ? reminders
-        : [{
+    const [storedReminderVersion, setStoredReminderVersion] = useState(0);
+
+    useEffect(() => subscribeLocalData(() => {
+        setStoredReminderVersion((version) => version + 1);
+    }), []);
+
+    const visibleReminders = useMemo(() => {
+        const now = Date.now();
+        const recentStoredReminders = readReminderEvents()
+            .filter((event) => now - event.triggeredAt <= RECENT_REMINDER_WINDOW_MS)
+            .map((event) => ({
+                ...event,
+                triggeredAt: event.triggeredAt,
+            }));
+        const liveReminders = reminders.map((reminder, index) => ({
+            ...reminder,
+            triggeredAt: now - index,
+        }));
+        const reminderMap = new Map<string, VisibleReminder>();
+
+        [...liveReminders, ...recentStoredReminders]
+            .forEach((reminder) => {
+                const key = `${reminder.type}-${reminder.title}-${reminder.level}`;
+                if (!reminderMap.has(key)) {
+                    reminderMap.set(key, reminder);
+                }
+            });
+
+        const mergedReminders = [...reminderMap.values()].sort((a, b) => b.triggeredAt - a.triggeredAt);
+        const visibleReminders = mergedReminders.length > 0
+            ? mergedReminders
+            : [{
             id: "all-good",
             type: "face" as const,
             title: "All good for now",
@@ -15,7 +54,10 @@ function ReminderList({ reminders }: ReminderListProps) {
             level: "info" as const,
             deliveryMethod: "card" as const,
             cooldownMs: 0,
+            triggeredAt: now,
         }];
+        return visibleReminders;
+    }, [reminders, storedReminderVersion]);
 
     return (
         <section className="panel reminder-card">

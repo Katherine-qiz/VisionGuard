@@ -121,12 +121,12 @@ def calculate_eye_health_score(
 
 def get_score_level(score: int) -> str:
     if score >= 85:
-        return "Healthy"
-    if score >= 70:
         return "Good"
-    if score >= 50:
+    if score >= 70:
         return "Attention"
-    return "Risk"
+    if score >= 50:
+        return "Warning"
+    return "High Risk"
 
 
 def build_alerts(
@@ -333,29 +333,44 @@ def parse_json_report(text: str):
     cleaned = cleaned.replace("```json", "").replace("```", "").strip()
 
     try:
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, str):
+            return parse_json_report(parsed)
+        if not isinstance(parsed, dict):
+            raise json.JSONDecodeError("Expected JSON object", cleaned, 0)
+        return parsed
     except json.JSONDecodeError:
         object_start = cleaned.find("{")
         object_end = cleaned.rfind("}")
         if object_start == -1 or object_end == -1 or object_end <= object_start:
             raise
 
-        return json.loads(cleaned[object_start:object_end + 1])
+        parsed = json.loads(cleaned[object_start:object_end + 1])
+        if isinstance(parsed, str):
+            return parse_json_report(parsed)
+        if not isinstance(parsed, dict):
+            raise json.JSONDecodeError("Expected JSON object", cleaned, object_start)
+        return parsed
 
 
 report_metrics_history = deque(maxlen=20)
 
 
 def normalize_report(report):
+    recommendations = report.get("recommendations", report.get("suggestions", []))
+    suggestions = report.get("suggestions", recommendations)
     return {
         "summary": report.get("summary", ""),
         "trendInsight": report.get("trendInsight", ""),
         "riskLevel": report.get("riskLevel", report.get("risk_level", "medium")),
         "score": report.get("score", 0),
         "keyFindings": report.get("keyFindings", []),
+        "issues": report.get("issues", []),
         "behaviorTrends": report.get("behaviorTrends", []),
         "fatigueAnalysis": report.get("fatigueAnalysis", []),
-        "recommendations": report.get("recommendations", report.get("suggestions", [])),
+        "riskFactors": report.get("riskFactors", []),
+        "recommendations": recommendations,
+        "suggestions": suggestions,
     }
 
 
@@ -390,6 +405,11 @@ def build_report_context(metrics, request_data):
 
     return {
         "currentMetrics": metrics,
+        "currentStateRule": (
+            "Use currentMetrics and currentMetrics.eyeHealthScore as the current monitoring state. "
+            "previousReport is historical context only and must not be described as the current score."
+        ),
+        "previousReport": request_data.get("previousReport"),
         "historicalSummary": {
             "sampleCount": len(combined_samples),
             "averageBlinkRate": average_metric(combined_samples, "blinkRate"),
@@ -409,6 +429,11 @@ def call_deepseek_report(report_context):
     user_prompt = (
         "Analyze this VisionGuard eye-use context with current metrics and recent historical patterns:\n"
         f"{json.dumps(report_context, ensure_ascii=False)}\n\n"
+        "Important score consistency rules:\n"
+        "- Use currentMetrics.eyeHealthScore as the report snapshot score.\n"
+        "- Describe currentMetrics as the current monitoring state.\n"
+        "- Treat previousReport only as historical context. Do not describe previousReport.score as the current score.\n"
+        "- If currentMetrics.eyeHealthScore is 94, the summary must not say the current eye health score is 79.\n\n"
         "Return ONLY valid JSON in this format:\n"
         "{\n"
         '  "summary": string,\n'
@@ -1125,6 +1150,8 @@ def get_trend():
 @app.route("/api/report", methods=["POST"])
 def generate_ai_report():
     data = request.get_json(silent=True) or {}
+    print("REPORT API CALLED")
+    print("REPORT REQUEST JSON:", data)
 
     if data.get("isCalibrating"):
         fallback_report = build_fallback_report(data, "Calibration data is excluded from AI reports")
@@ -1135,12 +1162,48 @@ def generate_ai_report():
             "report": fallback_report,
         }), 200
 
+    metrics = {
+        "blinkRate": data.get("blinkRate"),
+        "distanceCm": data.get("distanceCm"),
+        "brightnessLux": data.get("brightnessLux"),
+        "useTimeSeconds": data.get("useTimeSeconds"),
+        "eyeHealthScore": data.get("eyeHealthScore"),
+    }
     report_input = {
         **data,
         "session_use_time": data.get("session_use_time", data.get("sessionUseTimeSeconds", 0)),
         "total_use_time": data.get("total_use_time", data.get("totalUseTimeSeconds", 0)),
         "avg_session_use_time": data.get("avg_session_use_time", data.get("avgSessionUseTimeSeconds", 0)),
     }
+    report_context = build_report_context(metrics, data)
+    deepseek_error = None
+
+    try:
+        raw_output = call_deepseek_report(report_context)
+        report = normalize_report(parse_json_report(raw_output))
+        if isinstance(metrics.get("eyeHealthScore"), (int, float)):
+            report["score"] = int(round(metrics["eyeHealthScore"]))
+        report["session_use_time"] = report_input["session_use_time"]
+        report["total_use_time"] = report_input["total_use_time"]
+        report_metrics_history.append(metrics)
+
+        response_payload = {
+            "source": "deepseek_direct",
+            "success": True,
+            "report": report,
+        }
+        print("REPORT RESPONSE TO FRONTEND", {
+            "source": response_payload["source"],
+            "success": response_payload["success"],
+            "hasReport": isinstance(response_payload.get("report"), dict),
+            "riskLevel": response_payload["report"].get("riskLevel"),
+            "score": response_payload["report"].get("score"),
+        })
+        return jsonify(response_payload)
+    except Exception as error:
+        deepseek_error = error
+        print("DEEPSEEK DIRECT REPORT FAILED TYPE:", type(error).__name__)
+        print("DEEPSEEK DIRECT REPORT FAILED MESSAGE:", str(error))
 
     try:
         response_text = call_llm(build_report_prompt(report_input))
@@ -1149,7 +1212,7 @@ def generate_ai_report():
         return jsonify({
             "source": "fallback",
             "success": False,
-            "error": f"AI report generation failed: {str(error)}",
+            "error": f"AI report generation failed: DeepSeek direct error: {str(deepseek_error)}; OpenRouter error: {str(error)}",
             "report": fallback_report,
         }), 200
 
@@ -1160,13 +1223,16 @@ def generate_ai_report():
         return jsonify({
             "source": "fallback",
             "success": False,
-            "error": f"Invalid AI response: {str(error)}",
+            "error": f"Invalid OpenRouter AI response: {str(error)}. DeepSeek direct error: {str(deepseek_error)}",
             "report": fallback_report,
             "raw": response_text,
         }), 200
 
     report["session_use_time"] = report_input["session_use_time"]
     report["total_use_time"] = report_input["total_use_time"]
+    report = normalize_report(report)
+    if isinstance(metrics.get("eyeHealthScore"), (int, float)):
+        report["score"] = int(round(metrics["eyeHealthScore"]))
 
     return jsonify({
         "source": "openrouter",
@@ -1218,18 +1284,23 @@ def generate_report():
             "error": "parse_failed",
         }), 200
 
-    report_metrics_history.append(metrics)
-    print("REPORT RESPONSE TO FRONTEND", {
-        "success": True,
-        "reportFields": list(report.keys()),
-        "riskLevel": report.get("riskLevel"),
-        "score": report.get("score"),
-    })
+    if isinstance(metrics.get("eyeHealthScore"), (int, float)):
+        report["score"] = int(round(metrics["eyeHealthScore"]))
 
-    return jsonify({
+    report_metrics_history.append(metrics)
+    response_payload = {
         "success": True,
         "report": report,
+    }
+    print("REPORT RESPONSE TO FRONTEND", {
+        "success": response_payload["success"],
+        "hasReport": isinstance(response_payload.get("report"), dict),
+        "reportFields": list(response_payload["report"].keys()),
+        "riskLevel": response_payload["report"].get("riskLevel"),
+        "score": response_payload["report"].get("score"),
     })
+
+    return jsonify(response_payload)
 
 
 if __name__ == "__main__":

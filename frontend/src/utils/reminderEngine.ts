@@ -2,16 +2,26 @@ import type { EyeMetrics } from "../types/metrics";
 import type { Reminder, ReminderType } from "../types/reminder";
 import { saveReminderEvent } from "./reminderStorage";
 
-// Temporarily disabled for notification testing.
-// const COOLDOWNS_KEY = "visionguard_reminder_cooldowns";
-const CARD_EVENT_COOLDOWNS_KEY = "visionguard_card_reminder_cooldowns";
+const HISTORY_COOLDOWNS_KEY = "visionguard_reminder_history_cooldowns";
+const BROWSER_COOLDOWNS_KEY = "visionguard_reminder_browser_cooldowns";
 const DISTANCE_SUSTAINED_MS = 10 * 1000;
 const BLINK_SUSTAINED_MS = 90 * 1000;
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
-const TEN_MINUTES_MS = 10 * 60 * 1000;
 const TWENTY_MINUTES_MS = 20 * 60 * 1000;
 
 const conditionStartedAt: Partial<Record<ReminderType, number>> = {};
+const cooldownByType: Record<ReminderType, number> = {
+    blink: FIVE_MINUTES_MS,
+    distance: FIVE_MINUTES_MS,
+    brightness: FIVE_MINUTES_MS,
+    use_time: TWENTY_MINUTES_MS,
+    face: FIVE_MINUTES_MS,
+};
+const levelRank: Record<Reminder["level"], number> = {
+    info: 0,
+    attention: 1,
+    warning: 2,
+};
 
 type ReminderEngineOptions = {
     monitoringDurationSeconds: number;
@@ -62,17 +72,21 @@ function safeWriteJson(key: string, value: unknown) {
     }
 }
 
-// Temporarily disabled for notification testing.
-// function isCoolingDown(type: ReminderType, now: number, cooldownMs: number) {
-//     const cooldowns = safeReadJson<Partial<Record<ReminderType, number>>>(COOLDOWNS_KEY, {});
-//     const lastTriggeredAt = cooldowns[type] ?? 0;
-//     return now - lastTriggeredAt < cooldownMs;
-// }
+type CooldownEntry = {
+    triggeredAt: number;
+    level: Reminder["level"];
+};
 
-function isCardEventCoolingDown(type: ReminderType, now: number, cooldownMs: number) {
-    const cooldowns = safeReadJson<Partial<Record<ReminderType, number>>>(CARD_EVENT_COOLDOWNS_KEY, {});
-    const lastTriggeredAt = cooldowns[type] ?? 0;
-    return now - lastTriggeredAt < cooldownMs;
+function canPassTypeCooldown(
+    key: string,
+    reminder: Reminder,
+    now: number,
+) {
+    const cooldowns = safeReadJson<Partial<Record<ReminderType, CooldownEntry>>>(key, {});
+    const lastEntry = cooldowns[reminder.type];
+    if (!lastEntry) return true;
+    const hasLevelUpgrade = levelRank[reminder.level] > levelRank[lastEntry.level];
+    return hasLevelUpgrade || now - lastEntry.triggeredAt >= cooldownByType[reminder.type];
 }
 
 function canAttemptBrowserNotification(force = false) {
@@ -83,66 +97,44 @@ function canAttemptBrowserNotification(force = false) {
     return document.visibilityState !== "visible" || !document.hasFocus();
 }
 
-// Temporarily disabled for notification testing.
-// function markCooldown(type: ReminderType, now: number) {
-//     const cooldowns = safeReadJson<Partial<Record<ReminderType, number>>>(COOLDOWNS_KEY, {});
-//     safeWriteJson(COOLDOWNS_KEY, {
-//         ...cooldowns,
-//         [type]: now,
-//     });
-// }
-
-function markCardEventCooldown(type: ReminderType, now: number) {
-    const cooldowns = safeReadJson<Partial<Record<ReminderType, number>>>(CARD_EVENT_COOLDOWNS_KEY, {});
-    safeWriteJson(CARD_EVENT_COOLDOWNS_KEY, {
+function markTypeCooldown(key: string, reminder: Reminder, now: number) {
+    const cooldowns = safeReadJson<Partial<Record<ReminderType, CooldownEntry>>>(key, {});
+    safeWriteJson(key, {
         ...cooldowns,
-        [type]: now,
+        [reminder.type]: {
+            triggeredAt: now,
+            level: reminder.level,
+        },
     });
 }
 
-function recordCardReminderEvents(
+function recordReminderEvents(
     reminders: Reminder[],
     metrics: EyeMetrics,
     now: number,
     userId = "local-user",
 ) {
     reminders.forEach((reminder) => {
-        if (isCardEventCoolingDown(reminder.type, now, reminder.cooldownMs)) return;
+        if (!canPassTypeCooldown(HISTORY_COOLDOWNS_KEY, reminder, now)) return;
         saveReminderEvent(userId, reminder, metrics, now);
-        markCardEventCooldown(reminder.type, now);
+        markTypeCooldown(HISTORY_COOLDOWNS_KEY, reminder, now);
     });
 }
 
 function addBrowserReminder(
     reminders: Reminder[],
     reminder: Reminder,
-    metrics: EyeMetrics,
     now: number,
-    userId = "local-user",
     allowFocusedNotification = false,
 ) {
-    console.log("Trying browser reminder:", reminder.type);
-
     if (!canAttemptBrowserNotification(allowFocusedNotification)) {
-        console.log("Browser reminder blocked:", {
-            type: reminder.type,
-            notificationSupported: typeof window !== "undefined" && "Notification" in window,
-            permission: typeof window !== "undefined" && "Notification" in window ? Notification.permission : "not-supported",
-            visibilityState: typeof document !== "undefined" ? document.visibilityState : "unknown",
-            hasFocus: typeof document !== "undefined" ? document.hasFocus() : false,
-            allowFocusedNotification,
-        });
         return;
     }
 
-    // Temporarily disabled for notification testing.
-    // if (isCoolingDown(reminder.type, now, reminder.cooldownMs)) return;
+    if (!canPassTypeCooldown(BROWSER_COOLDOWNS_KEY, reminder, now)) return;
 
     reminders.push(reminder);
-    // Temporarily disabled for notification testing.
-    // markCooldown(reminder.type, now);
-    saveReminderEvent(userId, reminder, metrics, now);
-    console.log("Browser reminder added with cooldown disabled:", reminder.type);
+    markTypeCooldown(BROWSER_COOLDOWNS_KEY, reminder, now);
 }
 
 export function resetReminderEngineState() {
@@ -156,50 +148,15 @@ export function evaluateReminders(
     options: ReminderEngineOptions,
 ): ReminderEngineResult {
     const now = options.now ?? Date.now();
-    if (options.reminders) {
-        const browserReminders: Reminder[] = [];
-        recordCardReminderEvents(options.reminders, metrics, now, options.userId);
+    const activeCardReminders: Reminder[] = [];
+    const browserReminders: Reminder[] = [];
 
-        options.reminders
-            .filter((reminder) => reminder.type !== "face")
-            .forEach((reminder) => {
-                if (reminder.type === "blink") {
-                    if ((metrics.blinkWindowSeconds ?? 0) < 30 || metrics.blinkRate >= 8) return;
-                    conditionStartedAt.blink ??= now;
-                    if (now - conditionStartedAt.blink < BLINK_SUSTAINED_MS) return;
-                } else {
-                    delete conditionStartedAt.blink;
-                }
-
-                if (reminder.type === "use_time") {
-                    const continuousUseTimeSeconds = metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds;
-                    if (continuousUseTimeSeconds < 25 * 60) return;
-                }
-
-                addBrowserReminder(
-                    browserReminders,
-                    {
-                        ...reminder,
-                        id: `${reminder.type}-notification-${now}`,
-                        deliveryMethod: "browser_notification",
-                    },
-                    metrics,
-                    now,
-                    options.userId,
-                    options.allowFocusedNotification,
-                );
-            });
-
-        const result = {
-            cardReminders: options.reminders,
+    if (metrics.isCalibrating) {
+        return {
+            cardReminders: activeCardReminders,
             browserReminders,
         };
-        console.log("evaluateReminders result:", result);
-        return result;
     }
-
-    const cardReminders: Reminder[] = [];
-    const browserReminders: Reminder[] = [];
 
     const continuousUseTimeSeconds = metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds;
 
@@ -212,39 +169,38 @@ export function evaluateReminders(
             "card",
             TWENTY_MINUTES_MS,
         );
-        cardReminders.push(cardReminder);
+        activeCardReminders.push(cardReminder);
         if (continuousUseTimeSeconds >= 25 * 60) {
             addBrowserReminder(
                 browserReminders,
                 { ...cardReminder, id: `use_time-notification-${now}`, deliveryMethod: "browser_notification" },
-                metrics,
                 now,
-                options.userId,
                 options.allowFocusedNotification,
             );
         }
     }
 
-    if (metrics.distanceCm > 0 && metrics.distanceCm < 40) {
+    if (metrics.distanceCm > 0 && (metrics.distanceCm < 50 || metrics.distanceCm > 100)) {
         conditionStartedAt.distance ??= now;
+        const isWarningDistance = metrics.distanceCm < 40 || metrics.distanceCm > 120;
 
         const cardReminder = makeReminder(
             "distance",
-            "📏 Scoot back a little",
-            "Your viewing distance is below 40 cm. Try sitting around an arm's length from your screen.",
-            "warning",
+            isWarningDistance ? "📏 Scoot back a little" : "📏 Viewing distance needs a small nudge",
+            metrics.distanceCm < 50
+                ? "Your viewing distance is below the comfortable range. Try sitting around an arm's length from your screen."
+                : "Your screen is a bit far away. Adjust your setup so text stays easy to read without leaning.",
+            isWarningDistance ? "warning" : "attention",
             "card",
             FIVE_MINUTES_MS,
         );
-        cardReminders.push(cardReminder);
+        activeCardReminders.push(cardReminder);
 
-        if (now - conditionStartedAt.distance >= DISTANCE_SUSTAINED_MS) {
+        if (isWarningDistance && now - conditionStartedAt.distance >= DISTANCE_SUSTAINED_MS) {
             addBrowserReminder(
                 browserReminders,
                 { ...cardReminder, id: `distance-notification-${now}`, deliveryMethod: "browser_notification" },
-                metrics,
                 now,
-                options.userId,
                 options.allowFocusedNotification,
             );
         }
@@ -254,26 +210,27 @@ export function evaluateReminders(
 
     if (
         metrics.faceDetected &&
-        metrics.blinkRate < 8 &&
+        metrics.blinkRate < 12 &&
         (metrics.blinkWindowSeconds ?? 0) >= 30
     ) {
         conditionStartedAt.blink ??= now;
+        const isWarningBlink = metrics.blinkRate < 8;
         const cardReminder = makeReminder(
             "blink",
-            "👀 Blink check",
-            "Your blink rate is low. Try a few intentional blinks to keep your eyes comfortable.",
-            "attention",
+            isWarningBlink ? "👀 Blink check" : "👀 Blink rhythm needs a nudge",
+            isWarningBlink
+                ? "Your blink rate is low. Try a few intentional blinks to keep your eyes comfortable."
+                : "Your blink rate is slightly below the comfortable range. Add a few gentle blinks while reading.",
+            isWarningBlink ? "warning" : "attention",
             "card",
             FIVE_MINUTES_MS,
         );
-        cardReminders.push(cardReminder);
-        if (now - conditionStartedAt.blink >= BLINK_SUSTAINED_MS) {
+        activeCardReminders.push(cardReminder);
+        if (isWarningBlink && now - conditionStartedAt.blink >= BLINK_SUSTAINED_MS) {
             addBrowserReminder(
                 browserReminders,
                 { ...cardReminder, id: `blink-notification-${now}`, deliveryMethod: "browser_notification" },
-                metrics,
                 now,
-                options.userId,
                 options.allowFocusedNotification,
             );
         }
@@ -281,28 +238,29 @@ export function evaluateReminders(
         delete conditionStartedAt.blink;
     }
 
-    if (metrics.brightnessLux < 100 || metrics.brightnessLux > 1000) {
+    if (metrics.brightnessLux < 300 || metrics.brightnessLux > 750) {
+        const isWarningBrightness = metrics.brightnessLux < 200 || metrics.brightnessLux > 1000;
         const cardReminder = makeReminder(
             "brightness",
-            "💡 Tune your lighting",
+            isWarningBrightness ? "💡 Tune your lighting" : "💡 Lighting needs a small tune-up",
             "The lighting environment may be uncomfortable. Improve ambient light or reduce glare.",
-            "attention",
+            isWarningBrightness ? "warning" : "attention",
             "card",
-            TEN_MINUTES_MS,
+            FIVE_MINUTES_MS,
         );
-        cardReminders.push(cardReminder);
-        addBrowserReminder(
-            browserReminders,
-            { ...cardReminder, id: `brightness-notification-${now}`, deliveryMethod: "browser_notification" },
-            metrics,
-            now,
-            options.userId,
-            options.allowFocusedNotification,
-        );
+        activeCardReminders.push(cardReminder);
+        if (isWarningBrightness) {
+            addBrowserReminder(
+                browserReminders,
+                { ...cardReminder, id: `brightness-notification-${now}`, deliveryMethod: "browser_notification" },
+                now,
+                options.allowFocusedNotification,
+            );
+        }
     }
 
     if (!metrics.faceDetected) {
-        cardReminders.push(makeReminder(
+        activeCardReminders.push(makeReminder(
             "face",
             "🙂 Camera lost your face",
             "Adjust your camera angle so VisionGuard can estimate your viewing habits.",
@@ -312,10 +270,11 @@ export function evaluateReminders(
         ));
     }
 
+    recordReminderEvents(activeCardReminders, metrics, now, options.userId);
+
     const result = {
-        cardReminders: cardReminders.slice(0, 3),
+        cardReminders: activeCardReminders,
         browserReminders,
     };
-    console.log("evaluateReminders result:", result);
     return result;
 }

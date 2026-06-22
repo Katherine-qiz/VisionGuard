@@ -1,5 +1,6 @@
+import { readUserProfile } from "./localData";
+
 export function getCurrentUserId() {
-    return localStorage.getItem("visionguard_user_id")
-        || localStorage.getItem("visionguard_username")
-        || "demo-user";
+    const profile = readUserProfile();
+    return profile.userId || profile.username || "demo-user";
 }

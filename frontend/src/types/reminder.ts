@@ -16,5 +16,17 @@ export type ReminderEvent = Reminder & {
     userId: string;
     triggeredAt: number;
     date: string;
-    metricsSnapshot: EyeMetrics;
+    metricsSnapshot: Partial<Pick<
+        EyeMetrics,
+        | "eyeHealthScore"
+        | "scoreLevel"
+        | "blinkRate"
+        | "distanceCm"
+        | "brightnessLux"
+        | "sessionUseTimeSeconds"
+        | "totalUseTimeSeconds"
+        | "continuousUseTimeSeconds"
+        | "faceDetected"
+        | "isCalibrating"
+    >>;
 };

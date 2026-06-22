@@ -8,6 +8,7 @@ import { readReminderEvents, reminderEventDisplayDate } from "../utils/reminderS
 import type { ReminderEvent, ReminderType } from "../types/reminder";
 import { getCurrentUserId } from "../utils/user";
 import { localDateKey, utcDateKey } from "../utils/dateUtils";
+import { readDailySummaries } from "../utils/localData";
 
 const riskTypes: ReminderType[] = ["use_time", "distance", "blink", "brightness", "face"];
 
@@ -376,6 +377,7 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
 
     const currentSamples = trendData?.samples ?? [];
     const currentEvents = trendData?.events ?? [];
+    const dailySummaries = readDailySummaries();
     const sevenDayDateSet = useMemo(() => new Set(dates), [dates]);
     const sevenDayEvents = currentEvents.filter((event) => sevenDayDateSet.has(reminderEventDisplayDate(event)));
     const selectedSamples = currentSamples
@@ -399,15 +401,16 @@ function TrendPage({ onOpenSettings }: TrendPageProps) {
             .filter((sample) => metricSampleDisplayDate(sample) === date)
             .filter((sample) => !sample.isCalibrating);
         const dayEvents = currentEvents.filter((event) => reminderEventDisplayDate(event) === date);
+        const daySummary = dailySummaries.find((item) => item.date === date);
 
         return {
             date,
-            score: averageOrNull(daySamples.map((sample) => sample.eyeHealthScore)),
-            useTime: daySamples.length > 0 ? Math.round(Math.max(...daySamples.map(sampleUseTimeSeconds)) / 60) : null,
-            alertCount: dayEvents.length,
-            blinkRate: averageOrNull(daySamples.map((sample) => sample.blinkRate)),
-            distance: averageOrNull(daySamples.map((sample) => sample.distanceCm)),
-            brightness: averageOrNull(daySamples.map((sample) => sample.brightnessLux)),
+            score: daySamples.length > 0 ? averageOrNull(daySamples.map((sample) => sample.eyeHealthScore)) : daySummary?.averageEyeHealthScore ?? null,
+            useTime: daySamples.length > 0 ? Math.round(Math.max(...daySamples.map(sampleUseTimeSeconds)) / 60) : daySummary ? Math.round(daySummary.totalUseTimeSeconds / 60) : null,
+            alertCount: dayEvents.length > 0 ? dayEvents.length : daySummary?.reminderCount ?? 0,
+            blinkRate: daySamples.length > 0 ? averageOrNull(daySamples.map((sample) => sample.blinkRate)) : daySummary?.averageBlinkRate ?? null,
+            distance: daySamples.length > 0 ? averageOrNull(daySamples.map((sample) => sample.distanceCm)) : daySummary?.averageDistanceCm ?? null,
+            brightness: daySamples.length > 0 ? averageOrNull(daySamples.map((sample) => sample.brightnessLux)) : daySummary?.averageBrightnessLux ?? null,
         };
     });
     const weeklyReview = buildWeeklyReview({

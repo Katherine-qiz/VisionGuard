@@ -15,7 +15,7 @@ import type { Reminder } from "../types/reminder";
 import { dateKey, saveMetricSample } from "../utils/metricsStorage";
 import { sendBrowserNotification } from "../utils/notification";
 import { evaluateReminders, resetReminderEngineState } from "../utils/reminderEngine";
-import { evaluateRisk, resetSustainedRiskState, type RiskResult } from "../utils/riskEngine";
+import { evaluateRisk, type RiskResult } from "../utils/riskEngine";
 import { getCurrentUserId } from "../utils/user";
 
 const ANALYZE_INTERVAL_MS = 180;
@@ -37,7 +37,7 @@ const DEFAULT_METRICS: EyeMetrics = {
     continuousUseTimeSeconds: 0,
     breakDurationSeconds: 0,
     isCalibrating: true,
-    eyeHealthScore: 80,
+    eyeHealthScore: 90,
     scoreLevel: "Good",
     useTimeStatus: "normal",
     scoreIssue: "none",
@@ -134,7 +134,7 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
                 setMetrics({
                     ...data,
                     debugBackendScore: data.debugBackendScore ?? data.eyeHealthScore,
-                    eyeHealthScore: nextRiskResult.score,
+                    eyeHealthScore: nextRiskResult.displayScore,
                     scoreLevel: nextRiskResult.scoreLevel,
                 });
                 setRiskResult(nextRiskResult);
@@ -190,7 +190,6 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
         isAnalyzingRef.current = false;
         setCardReminders([]);
         resetReminderEngineState();
-        resetSustainedRiskState();
 
         setRawStream((stream) => {
             stream?.getTracks().forEach((track) => track.stop());
@@ -219,7 +218,6 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
             monitoringStartedAtRef.current = Date.now();
             lastSampleSavedAtRef.current = 0;
             resetReminderEngineState();
-            resetSustainedRiskState();
             void resetAnalyzerSession().catch((err) => {
                 console.warn("[Monitoring] backend reset failed, monitoring continues", err);
             });
@@ -301,10 +299,15 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
                 }
 
                 const nextRiskResult = evaluateRisk(result);
+                console.log("[Reminder Debug] risk evaluation", {
+                    isCalibrating: result.isCalibrating,
+                    risks: nextRiskResult.risks,
+                    reminders: nextRiskResult.reminders,
+                });
                 const scoredMetrics: EyeMetrics = {
                     ...result,
                     debugBackendScore: result.debugBackendScore ?? result.eyeHealthScore,
-                    eyeHealthScore: nextRiskResult.score,
+                    eyeHealthScore: nextRiskResult.displayScore,
                     scoreLevel: nextRiskResult.scoreLevel,
                 };
 
@@ -314,21 +317,35 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
                 const startedAt = monitoringStartedAtRef.current;
                 const userId = getCurrentUserId();
                 if (startedAt) {
-                    const monitoringDurationSeconds = Math.floor((Date.now() - startedAt) / 1000);
-                    const reminderResult = evaluateReminders(scoredMetrics, {
-                        monitoringDurationSeconds,
-                        reminders: nextRiskResult.reminders,
-                        userId,
-                        allowFocusedNotification: true,
-                    });
+                    try {
+                        if (scoredMetrics.isCalibrating) {
+                            setCardReminders([]);
+                        } else {
+                            const monitoringDurationSeconds = Math.floor((Date.now() - startedAt) / 1000);
+                            const reminderResult = evaluateReminders(scoredMetrics, {
+                                monitoringDurationSeconds,
+                                reminders: nextRiskResult.reminders,
+                                userId,
+                                allowFocusedNotification: true,
+                            });
 
-                    console.log("browser reminders:", reminderResult.browserReminders);
-                    console.log("card reminders:", reminderResult.cardReminders);
+                            console.log("[Reminder Debug] reminder engine result", {
+                                cardReminders: reminderResult.cardReminders,
+                                browserReminders: reminderResult.browserReminders,
+                            });
 
-                    setCardReminders(reminderResult.cardReminders);
-                    reminderResult.browserReminders.forEach((reminder) => {
-                        sendBrowserNotification(reminder, true);
-                    });
+                            setCardReminders(reminderResult.cardReminders);
+                            reminderResult.browserReminders.forEach((reminder) => {
+                                try {
+                                    sendBrowserNotification(reminder, true);
+                                } catch (notificationError) {
+                                    console.warn("Browser reminder notification failed:", notificationError);
+                                }
+                            });
+                        }
+                    } catch (reminderError) {
+                        console.warn("Reminder processing failed:", reminderError);
+                    }
                 }
 
                 if (scoredMetrics.faceDetected && !scoredMetrics.isCalibrating && Date.now() - lastSampleSavedAtRef.current >= 5000) {

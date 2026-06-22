@@ -1,5 +1,5 @@
 // src/types/metrics.ts
-export type ScoreLevel = "Healthy" | "Good" | "Attention" | "Risk";
+export type ScoreLevel = "Good" | "Attention" | "Warning" | "High Risk";
 
 export type EyeAlert = {
     type: string;

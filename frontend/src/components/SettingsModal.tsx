@@ -6,7 +6,9 @@ import {
     getLocalDataStats,
     importLocalData,
     readSettings,
+    readUserProfile,
     saveSettings,
+    saveUserProfile,
     type VisionGuardSettings,
 } from "../utils/localData";
 
@@ -36,8 +38,8 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
     const [settings, setSettings] = useState(readSettings);
     const [stats, setStats] = useState(getLocalDataStats);
     const [notificationPermission, setNotificationPermission] = useState<NotificationStatus>(getNotificationStatus);
-    const [displayName, setDisplayName] = useState(localStorage.getItem("visionguard_username") || "demo_user");
-    const [email, setEmail] = useState(localStorage.getItem("visionguard_email") || "");
+    const [displayName, setDisplayName] = useState(readUserProfile().username);
+    const [email, setEmail] = useState(readUserProfile().email);
     const [passwordOpen, setPasswordOpen] = useState(false);
     const [statusMessage, setStatusMessage] = useState("");
     const [errorMessage, setErrorMessage] = useState("");
@@ -49,8 +51,9 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
         setSettings(readSettings());
         setStats(getLocalDataStats());
         setNotificationPermission(getNotificationStatus());
-        setDisplayName(localStorage.getItem("visionguard_username") || "demo_user");
-        setEmail(localStorage.getItem("visionguard_email") || "");
+        const profile = readUserProfile();
+        setDisplayName(profile.username);
+        setEmail(profile.email);
         setStatusMessage("");
         setErrorMessage("");
     }, [open]);
@@ -84,13 +87,10 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
     };
 
     const handleSaveAccount = () => {
-        localStorage.setItem("visionguard_username", displayName.trim() || "demo_user");
-        if (email.trim()) {
-            localStorage.setItem("visionguard_email", email.trim());
-        } else {
-            localStorage.removeItem("visionguard_email");
-        }
-        window.dispatchEvent(new Event("visionguard-storage-updated"));
+        saveUserProfile({
+            username: displayName.trim() || "demo_user",
+            email: email.trim(),
+        });
         showStatus("Account details saved.");
     };
 
@@ -252,7 +252,7 @@ function SettingsModal({ open, onClose }: SettingsModalProps) {
                         </div>
                     )}
                     <div className="settings-actions-row">
-                        <span>Local user ID: {localStorage.getItem("visionguard_user_id") || displayName || "demo_user"}</span>
+                        <span>Local user ID: {readUserProfile().userId || displayName || "demo_user"}</span>
                         <button className="primary-button" onClick={handleSaveAccount} type="button">Save changes</button>
                     </div>
                 </section>
