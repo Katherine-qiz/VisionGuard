@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Eye, LayoutDashboard, LineChart, LogOut, Settings, Sparkles } from "lucide-react";
 
 const navItems = [
-    { icon: "📊", label: "Dashboard", to: "/dashboard" },
-    { icon: "✨", label: "AI Report", to: "/ai-report" },
-    { icon: "📈", label: "Trend", to: "/trend" },
+    { Icon: LayoutDashboard, label: "Dashboard", to: "/dashboard" },
+    { Icon: Sparkles, label: "AI Report", to: "/ai-report" },
+    { Icon: LineChart, label: "Trend", to: "/trend" },
 ];
 
 type SidebarProps = {
@@ -86,33 +87,37 @@ function Sidebar({ onOpenSettings }: SidebarProps) {
         <>
             <aside className="sidebar">
                 <div className="sidebar-logo">
-                    <div className="logo-mark">VG</div>
-                    <div>
-                        <strong>VisionGuard</strong>
-                        <span>Eye-care AI</span>
+                    <div className="sidebar-brand-mark" aria-hidden="true">
+                        <Eye className="sidebar-brand-eye" />
+                    </div>
+                    <div className="sidebar-brand-copy">
+                        <strong>
+                            Vision<span>Guard</span>
+                        </strong>
+                        <small>DeepSeek-powered eye-care AI</small>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav">
-                    {navItems.map((item) => (
+                    {navItems.map(({ Icon, ...item }) => (
                         <Link
                             className={`nav-item${location.pathname === item.to ? " active" : ""}`}
                             key={item.to}
                             to={item.to}
                         >
-                            <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                            <Icon className="nav-icon" aria-hidden="true" />
                             <span>{item.label}</span>
                         </Link>
                     ))}
                     <button className="nav-item nav-button" onClick={onOpenSettings} type="button">
-                        <span className="nav-icon" aria-hidden="true">⚙️</span>
+                        <Settings className="nav-icon" aria-hidden="true" />
                         <span>Settings</span>
                     </button>
                 </nav>
 
                 <div className="sidebar-footer">
                     <button className="nav-item nav-button" onClick={() => setLogoutOpen(true)} type="button">
-                        <span className="nav-icon" aria-hidden="true">↪</span>
+                        <LogOut className="nav-icon" aria-hidden="true" />
                         <span>Logout</span>
                     </button>
                 </div>
