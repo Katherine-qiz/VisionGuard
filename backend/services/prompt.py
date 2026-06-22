@@ -23,15 +23,29 @@ You are generating an AI eye-care report for VisionGuard.
 Use the following recent eye activity metrics:
 {json.dumps(normalized_data, ensure_ascii=False, indent=2)}
 
-Analyze the user's screen-use habits using these guidelines:
-- Blink rate below 8/min is high risk; 8-12/min is medium risk; 12+/min is usually comfortable.
-- Viewing distance below 40 cm is high risk; 40-50 cm is medium risk; 50-100 cm is recommended.
-- Brightness below 200 lux or above 750 lux can be uncomfortable.
+VisionGuard score standards:
+- 85-100: Good
+- 70-84: Attention
+- 50-69: Warning
+- 0-49: High Risk
+
+Metric standards:
+- Blink Rate: Good >=12/min; Attention 8-11/min; Warning <8/min
+- Viewing Distance: Good 50-100cm; Attention 40-49cm or 101-120cm; Warning <40cm or >120cm
+- Brightness: Good 300-750 lux; Attention 200-299 lux or 751-1000 lux; Warning <200 lux or >1000 lux
+- Session Time: Good <=20min; Attention 20-40min; Warning >40min
+
+Analyze the user's screen-use habits using these rules:
 - session_use_time is the current active session duration in seconds.
 - total_use_time is the daily accumulated active monitoring time in seconds.
 - avg_session_use_time is the user's average active session duration in seconds.
-- Continuous active use above 20 minutes should trigger a break recommendation.
-- Eye health score is 0-100, where higher is better.
+- Eye health score is a behavioral guidance score, not a medical diagnosis score.
+- Explain what the score means in friendly language.
+- Mention both good metrics and metrics that need attention.
+- Use the concrete values in the input.
+- Do not say distance or brightness is bad if it is in the Good range.
+- Do not exaggerate risk. If only one metric is poor, explain that clearly.
+- Give prevention and improvement advice.
 
 Return ONLY a valid JSON object. No extra text.
 Do not include markdown.
@@ -42,19 +56,39 @@ Do not include ```json or ```.
 The JSON must match exactly this schema:
 {{
   "summary": "string",
-  "risk_level": "low | medium | high",
+  "scoreMeaning": "string",
+  "mainIssue": "string",
+  "whatIsGood": ["string"],
+  "needsAttention": ["string"],
+  "metricExplanations": [
+    {{
+      "metric": "blinkRate | distance | brightness | sessionTime",
+      "currentValue": "string",
+      "recommendedRange": "string",
+      "status": "Good | Attention | Warning | High Risk",
+      "meaning": "string"
+    }}
+  ],
+  "actionPlan": {{
+    "doNow": ["string"],
+    "improveToday": ["string"],
+    "longTermHabits": ["string"]
+  }},
+  "preventionTips": ["string"],
+  "disclaimer": "string",
+  "riskLevel": "Good | Attention | Warning | High Risk",
   "score": 0,
-  "issues": ["string"],
+  "keyFindings": ["string"],
+  "riskFactors": ["string"],
   "recommendations": ["string"],
-  "score_explanation": "string",
   "session_use_time": 0,
   "total_use_time": 0
 }}
 
 Rules:
-- risk_level must be one of "low", "medium", or "high".
+- riskLevel must be one of "Good", "Attention", "Warning", or "High Risk".
 - score must be a number from 0 to 100.
-- issues must be an array of concise user-facing findings.
 - recommendations must be an array of practical, actionable eye-care advice.
-- summary and score_explanation must be plain user-facing text.
+- disclaimer must say this is not a medical diagnosis.
+- summary and scoreMeaning must be plain user-facing text.
 """.strip()

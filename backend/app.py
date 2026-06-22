@@ -359,11 +359,29 @@ report_metrics_history = deque(maxlen=20)
 def normalize_report(report):
     recommendations = report.get("recommendations", report.get("suggestions", []))
     suggestions = report.get("suggestions", recommendations)
+    score = report.get("score", 0)
+    risk_level = report.get("riskLevel", report.get("risk_level", "medium"))
     return {
         "summary": report.get("summary", ""),
+        "scoreMeaning": report.get("scoreMeaning", report.get("score_explanation", "")),
+        "mainIssue": report.get("mainIssue", ""),
+        "whatIsGood": report.get("whatIsGood", []),
+        "needsAttention": report.get("needsAttention", report.get("issues", [])),
+        "metricExplanations": report.get("metricExplanations", []),
+        "actionPlan": report.get("actionPlan", {
+            "doNow": [],
+            "improveToday": recommendations,
+            "longTermHabits": [],
+        }),
+        "preventionTips": report.get("preventionTips", []),
+        "disclaimer": report.get(
+            "disclaimer",
+            "This is not a medical diagnosis. If you have persistent eye pain, blurred vision, severe dryness, or worsening symptoms, consult an eye-care professional.",
+        ),
         "trendInsight": report.get("trendInsight", ""),
-        "riskLevel": report.get("riskLevel", report.get("risk_level", "medium")),
-        "score": report.get("score", 0),
+        "riskLevel": risk_level,
+        "risk_level": risk_level,
+        "score": score,
         "keyFindings": report.get("keyFindings", []),
         "issues": report.get("issues", []),
         "behaviorTrends": report.get("behaviorTrends", []),
@@ -434,15 +452,51 @@ def call_deepseek_report(report_context):
         "- Describe currentMetrics as the current monitoring state.\n"
         "- Treat previousReport only as historical context. Do not describe previousReport.score as the current score.\n"
         "- If currentMetrics.eyeHealthScore is 94, the summary must not say the current eye health score is 79.\n\n"
+        "VisionGuard score standards:\n"
+        "- 85-100: Good\n"
+        "- 70-84: Attention\n"
+        "- 50-69: Warning\n"
+        "- 0-49: High Risk\n\n"
+        "Metric standards:\n"
+        "- Blink Rate: Good >=12/min; Attention 8-11/min; Warning <8/min\n"
+        "- Viewing Distance: Good 50-100cm; Attention 40-49cm or 101-120cm; Warning <40cm or >120cm\n"
+        "- Brightness: Good 300-750 lux; Attention 200-299 lux or 751-1000 lux; Warning <200 lux or >1000 lux\n"
+        "- Session Time: Good <=20min; Attention 20-40min; Warning >40min\n\n"
+        "Report quality rules:\n"
+        "- This is behavioral guidance, not medical diagnosis.\n"
+        "- Explain what the score means in friendly language.\n"
+        "- Mention both healthy signals and signals that need attention.\n"
+        "- Use concrete values from currentMetrics when available.\n"
+        "- Do not say distance or brightness is bad if it is in the Good range.\n"
+        "- Do not exaggerate risk. If only one metric is poor, explain that the score is mainly driven by that metric.\n"
+        "- Give practical prevention and improvement advice.\n\n"
         "Return ONLY valid JSON in this format:\n"
         "{\n"
         '  "summary": string,\n'
-        '  "trendInsight": string,\n'
-        '  "riskLevel": "low | medium | high",\n'
+        '  "scoreMeaning": string,\n'
+        '  "mainIssue": string,\n'
+        '  "whatIsGood": string[],\n'
+        '  "needsAttention": string[],\n'
+        '  "metricExplanations": [\n'
+        '    {\n'
+        '      "metric": "blinkRate | distance | brightness | sessionTime",\n'
+        '      "currentValue": string,\n'
+        '      "recommendedRange": string,\n'
+        '      "status": "Good | Attention | Warning | High Risk",\n'
+        '      "meaning": string\n'
+        '    }\n'
+        '  ],\n'
+        '  "actionPlan": {\n'
+        '    "doNow": string[],\n'
+        '    "improveToday": string[],\n'
+        '    "longTermHabits": string[]\n'
+        '  },\n'
+        '  "preventionTips": string[],\n'
+        '  "disclaimer": string,\n'
+        '  "riskLevel": "Good | Attention | Warning | High Risk",\n'
         '  "score": number,\n'
         '  "keyFindings": string[],\n'
-        '  "behaviorTrends": string[],\n'
-        '  "fatigueAnalysis": string[],\n'
+        '  "riskFactors": string[],\n'
         '  "recommendations": string[]\n'
         "}"
     )
@@ -458,9 +512,11 @@ def call_deepseek_report(report_context):
                     "- Provide behavioral trend insights\n"
                     "- Detect fatigue progression\n"
                     "- Give personalized recommendations based on patterns\n"
+                    "- Explain screen-use behavior scores and metric ranges clearly\n"
                     "- Use clear, structured, human-friendly language\n\n"
                     "Avoid generic advice. Be specific, contextual, and personalized.\n\n"
                     "Your output should feel like Apple Health + ChatGPT hybrid health coach.\n"
+                    "Never provide medical diagnosis.\n"
                     "Return ONLY strict valid JSON. No markdown. No code blocks. No explanations. No extra text."
                 ),
             },

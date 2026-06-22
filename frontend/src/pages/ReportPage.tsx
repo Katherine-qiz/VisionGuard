@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Link } from "react-router-dom";
 
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { useMonitoring } from "../context/MonitoringContext";
 import type { EyeMetrics } from "../types/metrics";
+import type { ReminderEvent } from "../types/reminder";
 import {
     readDailySummaries,
     readLatestMetrics,
@@ -13,11 +15,71 @@ import {
     readReminderEvents,
     saveLatestReport,
     subscribeLocalData,
-    type StoredReport,
 } from "../utils/localData";
 
 type ReportPageProps = {
     onOpenSettings?: () => void;
+};
+
+type MetricStatus = "Good" | "Attention" | "Warning" | "High Risk";
+
+type MetricExplanation = {
+    metric: "blinkRate" | "distance" | "brightness" | "sessionTime";
+    currentValue: string;
+    recommendedRange: string;
+    status: MetricStatus;
+    meaning: string;
+};
+
+type ActionPlan = {
+    doNow: string[];
+    improveToday: string[];
+    longTermHabits: string[];
+};
+
+type MetricsSnapshot = {
+    blinkRate: number | null;
+    distanceCm: number | null;
+    brightnessLux: number | null;
+    useTimeSeconds: number | null;
+    sessionUseTimeSeconds: number | null;
+    totalUseTimeSeconds: number | null;
+    eyeHealthScore: number | null;
+};
+
+type AIReport = {
+    summary: string;
+    scoreMeaning: string;
+    mainIssue: string;
+    whatIsGood: string[];
+    needsAttention: string[];
+    metricExplanations: MetricExplanation[];
+    actionPlan: ActionPlan;
+    preventionTips: string[];
+    disclaimer: string;
+    score?: number;
+    riskLevel?: string;
+    risk_level?: string;
+    trendInsight?: string;
+    keyFindings?: string[];
+    issues?: string[];
+    behaviorTrends?: string[];
+    fatigueAnalysis?: string[];
+    riskFactors?: string[];
+    recommendations?: string[];
+    suggestions?: string[];
+};
+
+type ReportHistoryEntry = {
+    id: string;
+    prompt: string;
+    report: AIReport;
+    generatedAt: string;
+    reportScore: number;
+    riskLevel: MetricStatus;
+    topRisk: string;
+    metricsSnapshot: MetricsSnapshot;
+    remindersSnapshot: ReminderEvent[];
 };
 
 type ReportPayload = {
@@ -31,26 +93,13 @@ type ReportPayload = {
     totalUseTimeSeconds: number | null;
     eyeHealthScore: number | null;
     selectedDate: string;
+    metricsSnapshot: MetricsSnapshot;
+    remindersSnapshot: ReminderEvent[];
     recentSamples: Array<Record<string, unknown>>;
     reminders: unknown;
     latestMetrics: unknown;
     dailyStats: unknown;
     previousReport: unknown;
-};
-
-type AIReport = {
-    summary: string;
-    trendInsight?: string;
-    riskLevel: string;
-    risk_level?: string;
-    score: number;
-    keyFindings?: string[];
-    issues?: string[];
-    behaviorTrends?: string[];
-    fatigueAnalysis?: string[];
-    riskFactors?: string[];
-    recommendations?: string[];
-    suggestions?: string[];
 };
 
 type ReportResponse = {
@@ -60,88 +109,338 @@ type ReportResponse = {
     error?: string;
 };
 
-type ReportConversationEntry = {
-    id: string;
-    prompt: string;
-    report: AIReport;
-    generatedAt: string;
-};
-
 const REPORT_CONVERSATION_KEY = "visionguard_report_conversation";
 const REPORT_PROMPT_TEXT = "Generate my eye health report";
+const DEFAULT_DISCLAIMER = "This is not a medical diagnosis. If you have persistent eye pain, blurred vision, severe dryness, or worsening symptoms, consult an eye-care professional.";
+
+function localDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+function numberOrNull(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function secondsToMinutes(seconds: number | null) {
+    if (seconds === null) return null;
+    return Math.round(seconds / 60);
+}
+
+function formatGeneratedAt(generatedAt: string) {
+    return generatedAt ? new Date(generatedAt).toLocaleString() : "Not generated yet";
+}
+
+function scoreStatus(score: number): MetricStatus {
+    if (score >= 85) return "Good";
+    if (score >= 70) return "Attention";
+    if (score >= 50) return "Warning";
+    return "High Risk";
+}
+
+function statusClassName(status: MetricStatus) {
+    if (status === "Good") return "good-status";
+    if (status === "Attention") return "attention-status";
+    return "warning-status";
+}
+
+function riskLevelFromReport(report: Partial<AIReport> | null, reportScore: number): MetricStatus {
+    const rawRisk = String(report?.riskLevel ?? report?.risk_level ?? "").toLowerCase();
+    if (rawRisk.includes("high")) return "High Risk";
+    if (rawRisk.includes("warning")) return "Warning";
+    if (rawRisk.includes("medium") || rawRisk.includes("attention")) return "Attention";
+    if (rawRisk.includes("low") || rawRisk.includes("good")) return "Good";
+    return scoreStatus(reportScore);
+}
+
+function metricStatus(metric: MetricExplanation["metric"], value: number | null): MetricStatus {
+    if (value === null) return "Attention";
+    if (metric === "blinkRate") {
+        if (value >= 12) return "Good";
+        if (value >= 8) return "Attention";
+        return "Warning";
+    }
+    if (metric === "distance") {
+        if (value >= 50 && value <= 100) return "Good";
+        if ((value >= 40 && value < 50) || (value > 100 && value <= 120)) return "Attention";
+        return "Warning";
+    }
+    if (metric === "brightness") {
+        if (value >= 300 && value <= 750) return "Good";
+        if ((value >= 200 && value < 300) || (value > 750 && value <= 1000)) return "Attention";
+        return "Warning";
+    }
+    if (value <= 20) return "Good";
+    if (value <= 40) return "Attention";
+    return "Warning";
+}
+
+function metricMeaning(metric: MetricExplanation["metric"], status: MetricStatus) {
+    const meanings = {
+        blinkRate: {
+            Good: "Your blinking rhythm is in a comfortable range for screen work.",
+            Attention: "Your blink rate is slightly low, which may increase dryness during focused reading.",
+            Warning: "Your blink rate is low enough to deserve a conscious blinking reset.",
+            "High Risk": "Your blink pattern suggests sustained dryness risk.",
+        },
+        distance: {
+            Good: "Your viewing distance is close to the recommended arm's-length range.",
+            Attention: "Your screen distance is near the edge of the comfortable range.",
+            Warning: "Your screen distance is outside the comfortable range and may add strain.",
+            "High Risk": "Your viewing distance pattern needs attention.",
+        },
+        brightness: {
+            Good: "Your lighting looks comfortable for screen use.",
+            Attention: "Your lighting is slightly outside the comfort range.",
+            Warning: "Your lighting may be too dim or too glaring for comfortable viewing.",
+            "High Risk": "Your lighting exposure needs attention.",
+        },
+        sessionTime: {
+            Good: "Your current session is still within the 20-minute break rhythm.",
+            Attention: "You have passed the 20-minute mark, so a short eye break would help.",
+            Warning: "This session is long enough that a break should be prioritized.",
+            "High Risk": "Your session length suggests a sustained break is needed.",
+        },
+    } satisfies Record<MetricExplanation["metric"], Record<MetricStatus, string>>;
+
+    return meanings[metric][status];
+}
+
+function fallbackMetricExplanations(snapshot: MetricsSnapshot): MetricExplanation[] {
+    const blinkStatus = metricStatus("blinkRate", snapshot.blinkRate);
+    const distanceStatus = metricStatus("distance", snapshot.distanceCm);
+    const brightnessStatus = metricStatus("brightness", snapshot.brightnessLux);
+    const sessionMinutes = secondsToMinutes(snapshot.sessionUseTimeSeconds ?? snapshot.useTimeSeconds);
+    const sessionStatus = metricStatus("sessionTime", sessionMinutes);
+
+    return [
+        {
+            metric: "blinkRate",
+            currentValue: snapshot.blinkRate === null ? "No data" : `${Math.round(snapshot.blinkRate)}/min`,
+            recommendedRange: "Good >= 12/min; Attention 8-11/min; Warning < 8/min",
+            status: blinkStatus,
+            meaning: metricMeaning("blinkRate", blinkStatus),
+        },
+        {
+            metric: "distance",
+            currentValue: snapshot.distanceCm === null ? "No data" : `${Math.round(snapshot.distanceCm)} cm`,
+            recommendedRange: "Good 50-100 cm; Attention 40-49 or 101-120 cm; Warning < 40 or > 120 cm",
+            status: distanceStatus,
+            meaning: metricMeaning("distance", distanceStatus),
+        },
+        {
+            metric: "brightness",
+            currentValue: snapshot.brightnessLux === null ? "No data" : `${Math.round(snapshot.brightnessLux)} lux`,
+            recommendedRange: "Good 300-750 lux; Attention 200-299 or 751-1000 lux; Warning < 200 or > 1000 lux",
+            status: brightnessStatus,
+            meaning: metricMeaning("brightness", brightnessStatus),
+        },
+        {
+            metric: "sessionTime",
+            currentValue: sessionMinutes === null ? "No data" : `${sessionMinutes} min`,
+            recommendedRange: "Good <= 20 min; Attention 20-40 min; Warning > 40 min",
+            status: sessionStatus,
+            meaning: metricMeaning("sessionTime", sessionStatus),
+        },
+    ];
+}
+
+function topRiskFromMetrics(metrics: MetricExplanation[]) {
+    const ranked = [...metrics].sort((a, b) => {
+        const rank = { "High Risk": 3, Warning: 2, Attention: 1, Good: 0 } as const;
+        return rank[b.status] - rank[a.status];
+    });
+    const top = ranked.find((metric) => metric.status !== "Good");
+    if (!top) return "No major risk";
+    if (top.metric === "blinkRate") return "Blink rate";
+    if (top.metric === "distance") return "Viewing distance";
+    if (top.metric === "brightness") return "Brightness";
+    return "Session time";
+}
+
+function buildFallbackReport(snapshot: MetricsSnapshot, reportScore: number): AIReport {
+    const metrics = fallbackMetricExplanations(snapshot);
+    const needsAttention = metrics
+        .filter((metric) => metric.status !== "Good")
+        .map((metric) => `${topRiskFromMetrics([metric])}: ${metric.meaning}`);
+    const whatIsGood = metrics
+        .filter((metric) => metric.status === "Good")
+        .map((metric) => `${topRiskFromMetrics([metric]) === "No major risk" ? metric.metric : topRiskFromMetrics([metric])}: ${metric.meaning}`);
+
+    return {
+        summary: `Your report score is ${reportScore}/100. VisionGuard is using your latest blink, distance, brightness, and session-time signals to summarize your screen-use habits.`,
+        scoreMeaning: `A score of ${reportScore}/100 means your recent eye-care behavior is in the ${scoreStatus(reportScore).toLowerCase()} range. It is a behavioral guidance score, not a medical diagnosis.`,
+        mainIssue: needsAttention[0] ?? "No major issue stands out in this snapshot.",
+        whatIsGood: whatIsGood.length > 0 ? whatIsGood : ["At least one signal is close to the recommended range."],
+        needsAttention: needsAttention.length > 0 ? needsAttention : ["Keep monitoring to build a clearer pattern over time."],
+        metricExplanations: metrics,
+        actionPlan: {
+            doNow: ["Relax your focus for 20 seconds and look farther away from the screen."],
+            improveToday: ["Keep your screen about 50-100 cm away and check lighting before long work blocks."],
+            longTermHabits: ["Use short break rhythms and intentional blinking during reading or coding sessions."],
+        },
+        preventionTips: [
+            "Follow the 20-20-20 rhythm during longer sessions.",
+            "Keep the screen at a comfortable arm's-length distance.",
+            "Avoid very dim or glaring light around your workspace.",
+        ],
+        disclaimer: DEFAULT_DISCLAIMER,
+        score: reportScore,
+        riskLevel: scoreStatus(reportScore),
+    };
+}
+
+function normalizeMetricExplanation(value: unknown, fallback: MetricExplanation): MetricExplanation {
+    if (!value || typeof value !== "object") return fallback;
+    const explanation = value as Partial<MetricExplanation>;
+    const metric = explanation.metric === "blinkRate" || explanation.metric === "distance" || explanation.metric === "brightness" || explanation.metric === "sessionTime"
+        ? explanation.metric
+        : fallback.metric;
+    const status = explanation.status === "Good" || explanation.status === "Attention" || explanation.status === "Warning" || explanation.status === "High Risk"
+        ? explanation.status
+        : fallback.status;
+    return {
+        metric,
+        currentValue: typeof explanation.currentValue === "string" ? explanation.currentValue : fallback.currentValue,
+        recommendedRange: typeof explanation.recommendedRange === "string" ? explanation.recommendedRange : fallback.recommendedRange,
+        status,
+        meaning: typeof explanation.meaning === "string" ? explanation.meaning : fallback.meaning,
+    };
+}
+
+function normalizeActionPlan(value: unknown, fallback: ActionPlan): ActionPlan {
+    if (!value || typeof value !== "object") return fallback;
+    const actionPlan = value as Partial<ActionPlan>;
+    return {
+        doNow: stringArray(actionPlan.doNow).length > 0 ? stringArray(actionPlan.doNow) : fallback.doNow,
+        improveToday: stringArray(actionPlan.improveToday).length > 0 ? stringArray(actionPlan.improveToday) : fallback.improveToday,
+        longTermHabits: stringArray(actionPlan.longTermHabits).length > 0 ? stringArray(actionPlan.longTermHabits) : fallback.longTermHabits,
+    };
+}
+
+function normalizeReport(report: Partial<AIReport>, snapshot: MetricsSnapshot, reportScore: number): AIReport {
+    const fallback = buildFallbackReport(snapshot, reportScore);
+    const fallbackMetrics = fallback.metricExplanations;
+    const sourceMetrics = Array.isArray(report.metricExplanations) ? report.metricExplanations : [];
+    const recommendations = [
+        ...stringArray(report.recommendations),
+        ...stringArray(report.suggestions),
+    ];
+    const needsAttention = stringArray(report.needsAttention).length > 0
+        ? stringArray(report.needsAttention)
+        : [
+            ...stringArray(report.riskFactors),
+            ...stringArray(report.issues),
+            ...stringArray(report.fatigueAnalysis),
+        ];
+
+    return {
+        summary: report.summary || fallback.summary,
+        scoreMeaning: report.scoreMeaning || (report as { score_explanation?: string }).score_explanation || fallback.scoreMeaning,
+        mainIssue: report.mainIssue || needsAttention[0] || fallback.mainIssue,
+        whatIsGood: stringArray(report.whatIsGood).length > 0 ? stringArray(report.whatIsGood) : fallback.whatIsGood,
+        needsAttention: needsAttention.length > 0 ? needsAttention : fallback.needsAttention,
+        metricExplanations: fallbackMetrics.map((fallbackMetric, index) => normalizeMetricExplanation(sourceMetrics[index], fallbackMetric)),
+        actionPlan: normalizeActionPlan(report.actionPlan, recommendations.length > 0 ? {
+            ...fallback.actionPlan,
+            improveToday: recommendations,
+        } : fallback.actionPlan),
+        preventionTips: stringArray(report.preventionTips).length > 0 ? stringArray(report.preventionTips) : fallback.preventionTips,
+        disclaimer: report.disclaimer || DEFAULT_DISCLAIMER,
+        score: reportScore,
+        riskLevel: riskLevelFromReport(report, reportScore),
+        trendInsight: report.trendInsight,
+        keyFindings: stringArray(report.keyFindings),
+        issues: stringArray(report.issues),
+        behaviorTrends: stringArray(report.behaviorTrends),
+        fatigueAnalysis: stringArray(report.fatigueAnalysis),
+        riskFactors: stringArray(report.riskFactors),
+        recommendations,
+        suggestions: stringArray(report.suggestions),
+    };
+}
+
+function entryFromLegacyReport(value: unknown, generatedAt = ""): ReportHistoryEntry | null {
+    if (!value || typeof value !== "object") return null;
+    const maybeEntry = value as Partial<ReportHistoryEntry> & Partial<AIReport>;
+    if (maybeEntry.report && maybeEntry.metricsSnapshot && typeof maybeEntry.reportScore === "number") {
+        return {
+            id: maybeEntry.id ?? `report-${maybeEntry.generatedAt ?? generatedAt}`,
+            prompt: maybeEntry.prompt ?? REPORT_PROMPT_TEXT,
+            report: normalizeReport(maybeEntry.report, maybeEntry.metricsSnapshot, maybeEntry.reportScore),
+            generatedAt: maybeEntry.generatedAt ?? generatedAt,
+            reportScore: maybeEntry.reportScore,
+            riskLevel: maybeEntry.riskLevel ?? scoreStatus(maybeEntry.reportScore),
+            topRisk: maybeEntry.topRisk ?? topRiskFromMetrics(maybeEntry.report.metricExplanations ?? []),
+            metricsSnapshot: maybeEntry.metricsSnapshot,
+            remindersSnapshot: Array.isArray(maybeEntry.remindersSnapshot) ? maybeEntry.remindersSnapshot : [],
+        };
+    }
+
+    const reportScore = typeof maybeEntry.score === "number" ? Math.round(maybeEntry.score) : 0;
+    const snapshot: MetricsSnapshot = {
+        blinkRate: null,
+        distanceCm: null,
+        brightnessLux: null,
+        useTimeSeconds: null,
+        sessionUseTimeSeconds: null,
+        totalUseTimeSeconds: null,
+        eyeHealthScore: reportScore,
+    };
+    const report = normalizeReport(maybeEntry, snapshot, reportScore);
+    return {
+        id: `report-${generatedAt || Date.now()}`,
+        prompt: REPORT_PROMPT_TEXT,
+        report,
+        generatedAt,
+        reportScore,
+        riskLevel: scoreStatus(reportScore),
+        topRisk: topRiskFromMetrics(report.metricExplanations),
+        metricsSnapshot: snapshot,
+        remindersSnapshot: [],
+    };
+}
+
+function readReportConversationHistory(): ReportHistoryEntry[] {
+    try {
+        const rawValue = localStorage.getItem(REPORT_CONVERSATION_KEY);
+        const parsedValue = rawValue ? JSON.parse(rawValue) as unknown[] : [];
+        if (Array.isArray(parsedValue) && parsedValue.length > 0) {
+            return parsedValue
+                .map((entry) => entryFromLegacyReport(entry, (entry as { generatedAt?: string })?.generatedAt ?? ""))
+                .filter((entry): entry is ReportHistoryEntry => Boolean(entry));
+        }
+    } catch {
+        // Fall back to shared report history below.
+    }
+
+    return readReportHistory<unknown>()
+        .map((storedReport) => entryFromLegacyReport(storedReport.report, storedReport.generatedAt))
+        .filter((entry): entry is ReportHistoryEntry => Boolean(entry));
+}
 
 function readSavedReport() {
     try {
-        const parsedValue = readLatestReport<AIReport>() as (Partial<StoredReport> & Partial<AIReport>) | null;
+        const parsedValue = readLatestReport<unknown>();
         if (!parsedValue) return null;
-        const reportValue = parsedValue.report ?? parsedValue;
-        return {
-            report: normalizeReport(reportValue),
-            generatedAt: typeof parsedValue.generatedAt === "string" ? parsedValue.generatedAt : "",
-        };
+        return entryFromLegacyReport(parsedValue.report, parsedValue.generatedAt);
     } catch {
         return null;
     }
 }
 
-function readReportConversationHistory(): ReportConversationEntry[] {
-    try {
-        const rawValue = localStorage.getItem(REPORT_CONVERSATION_KEY);
-        const parsedValue = rawValue ? JSON.parse(rawValue) as Array<Partial<ReportConversationEntry>> : [];
-        if (Array.isArray(parsedValue) && parsedValue.length > 0) {
-            return parsedValue
-                .filter((entry) => entry.report && entry.generatedAt)
-                .map((entry) => ({
-                    id: entry.id ?? `report-${entry.generatedAt}`,
-                    prompt: entry.prompt ?? REPORT_PROMPT_TEXT,
-                    report: normalizeReport(entry.report ?? {}),
-                    generatedAt: entry.generatedAt ?? "",
-                }));
-        }
-    } catch {
-        // Fall back to report history below.
-    }
-
-    return readReportHistory<AIReport>()
-        .map((storedReport) => ({
-            id: `report-${storedReport.generatedAt}`,
-            prompt: REPORT_PROMPT_TEXT,
-            report: normalizeReport(storedReport.report),
-            generatedAt: storedReport.generatedAt,
-        }))
-        .filter((storedReport) => storedReport.generatedAt);
-}
-
-function saveReportConversationEntry(entry: ReportConversationEntry) {
+function saveReportConversationEntry(entry: ReportHistoryEntry) {
     const history = readReportConversationHistory();
     const nextHistory = [entry, ...history.filter((item) => item.id !== entry.id)].slice(0, 20);
     localStorage.setItem(REPORT_CONVERSATION_KEY, JSON.stringify(nextHistory));
     window.dispatchEvent(new Event("visionguard-storage-updated"));
     return nextHistory;
-}
-
-function normalizeReport(report: Partial<AIReport>): AIReport {
-    return {
-        summary: report.summary ?? "Your eye-care report is ready.",
-        trendInsight: report.trendInsight,
-        riskLevel: report.riskLevel ?? report.risk_level ?? "medium",
-        score: typeof report.score === "number" ? report.score : 0,
-        keyFindings: Array.isArray(report.keyFindings) ? report.keyFindings : [],
-        issues: Array.isArray(report.issues) ? report.issues : [],
-        behaviorTrends: Array.isArray(report.behaviorTrends) ? report.behaviorTrends : [],
-        fatigueAnalysis: Array.isArray(report.fatigueAnalysis) ? report.fatigueAnalysis : [],
-        riskFactors: Array.isArray(report.riskFactors) ? report.riskFactors : [],
-        recommendations: Array.isArray(report.recommendations) ? report.recommendations : [],
-        suggestions: Array.isArray(report.suggestions) ? report.suggestions : [],
-    };
-}
-
-function persistVisibleReport(report: AIReport, generatedAt = new Date().toISOString()) {
-    const storedReport = saveLatestReport(report, generatedAt);
-    return {
-        report: storedReport.report,
-        generatedAt: storedReport.generatedAt,
-    };
 }
 
 async function fetchCurrentMetrics() {
@@ -153,8 +452,16 @@ async function fetchCurrentMetrics() {
     return response.json() as Promise<Record<string, unknown>>;
 }
 
-function numberOrNull(value: unknown) {
-    return typeof value === "number" && Number.isFinite(value) ? value : null;
+function buildSnapshotFromPayload(payload: Omit<ReportPayload, "metricsSnapshot">): MetricsSnapshot {
+    return {
+        blinkRate: payload.blinkRate,
+        distanceCm: payload.distanceCm,
+        brightnessLux: payload.brightnessLux,
+        useTimeSeconds: payload.useTimeSeconds,
+        sessionUseTimeSeconds: payload.sessionUseTimeSeconds,
+        totalUseTimeSeconds: payload.totalUseTimeSeconds,
+        eyeHealthScore: payload.eyeHealthScore,
+    };
 }
 
 async function buildReportPayload(liveMetrics?: EyeMetrics): Promise<ReportPayload> {
@@ -169,12 +476,11 @@ async function buildReportPayload(liveMetrics?: EyeMetrics): Promise<ReportPaylo
         .filter((sample) => !sample.isCalibrating)
         .sort((a, b) => b.timestamp - a.timestamp);
     const latest = samples[0];
-    const reminderEvents = readReminderEvents()
+    const remindersSnapshot = readReminderEvents()
         .sort((a, b) => b.triggeredAt - a.triggeredAt)
         .slice(0, 8);
     const dailyStats = readDailySummaries();
     const latestMetrics = readLatestMetrics();
-    const storedReminders = readReminderEvents();
     const previousReport = readLatestReport();
     const latestScore = numberOrNull(liveMetrics?.eyeHealthScore)
         ?? numberOrNull(latestMetrics?.eyeHealthScore)
@@ -192,7 +498,7 @@ async function buildReportPayload(liveMetrics?: EyeMetrics): Promise<ReportPaylo
         ?? numberOrNull(currentMetrics.brightnessLux)
         ?? null;
 
-    return {
+    const payloadWithoutSnapshot = {
         blinkRate: numberOrNull(liveMetrics?.blinkRate) ?? numberOrNull(latestMetrics?.blinkRate) ?? latest?.blinkRate ?? numberOrNull(currentMetrics.blinkRate) ?? null,
         viewingDistance: distanceCm,
         distanceCm,
@@ -202,31 +508,31 @@ async function buildReportPayload(liveMetrics?: EyeMetrics): Promise<ReportPaylo
         sessionUseTimeSeconds: numberOrNull(liveMetrics?.sessionUseTimeSeconds) ?? numberOrNull(latestMetrics?.sessionUseTimeSeconds) ?? latest?.sessionUseTimeSeconds ?? numberOrNull(currentMetrics.sessionUseTimeSeconds) ?? null,
         totalUseTimeSeconds: numberOrNull(liveMetrics?.totalUseTimeSeconds) ?? numberOrNull(latestMetrics?.totalUseTimeSeconds) ?? latest?.totalUseTimeSeconds ?? numberOrNull(currentMetrics.totalUseTimeSeconds) ?? null,
         eyeHealthScore: latestScore,
-        selectedDate: new Date().toISOString().slice(0, 10),
+        selectedDate: localDateKey(),
+        remindersSnapshot,
         recentSamples: samples.slice(0, 8),
-        reminders: storedReminders.length > 0 ? storedReminders : reminderEvents,
+        reminders: remindersSnapshot,
         latestMetrics,
         dailyStats,
         previousReport: previousReport
             ? {
-                ...previousReport,
+                generatedAt: previousReport.generatedAt,
+                report: previousReport.report,
                 contextOnly: true,
-                note: "Historical context only. Do not describe this as the current score.",
+                note: "Historical context only. Use latestMetrics and eyeHealthScore as the current monitoring state. Do not describe previousReport as the current score.",
             }
             : null,
     };
-}
 
-function scoreStatus(score: number) {
-    if (score >= 85) return { label: "Good", className: "good-status" };
-    if (score >= 70) return { label: "Attention", className: "attention-status" };
-    if (score >= 50) return { label: "Warning", className: "warning-status" };
-    return { label: "High Risk", className: "warning-status" };
+    return {
+        ...payloadWithoutSnapshot,
+        metricsSnapshot: buildSnapshotFromPayload(payloadWithoutSnapshot),
+    };
 }
 
 function ReportList({ title, items }: { title: string; items: string[] }) {
     return (
-        <section className="report-section" style={{ minHeight: "100%" }}>
+        <section className="report-section">
             <h3>{title}</h3>
             {items.length > 0 ? (
                 <ul>
@@ -241,77 +547,137 @@ function ReportList({ title, items }: { title: string; items: string[] }) {
     );
 }
 
+function KeyMetricsTable({ metrics }: { metrics: MetricExplanation[] }) {
+    return (
+        <div className="report-table-wrap">
+            <table className="report-metrics-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Current Value</th>
+                        <th>Recommended Range</th>
+                        <th>Status</th>
+                        <th>Meaning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {metrics.map((metric) => (
+                        <tr key={metric.metric}>
+                            <td>{metric.metric === "blinkRate" ? "Blink Rate" : metric.metric === "distance" ? "Viewing Distance" : metric.metric === "brightness" ? "Brightness" : "Session Time"}</td>
+                            <td>{metric.currentValue}</td>
+                            <td>{metric.recommendedRange}</td>
+                            <td>
+                                <span className={`status-badge ${statusClassName(metric.status)}`}>{metric.status}</span>
+                            </td>
+                            <td>{metric.meaning}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function ReportArticle({
-    report,
-    generatedAt,
+    entry,
     currentScore,
+    showGuide,
+    reportTopRef,
+    howToReadRef,
 }: {
-    report: AIReport;
-    generatedAt: string;
-    currentScore: number;
+    entry: ReportHistoryEntry;
+    currentScore: number | null;
+    showGuide: boolean;
+    reportTopRef: RefObject<HTMLDivElement | null>;
+    howToReadRef: RefObject<HTMLDivElement | null>;
 }) {
-    const mainFindings = [...(report.keyFindings ?? []), ...(report.issues ?? [])];
-    const riskFactors = [...(report.riskFactors ?? []), ...(report.behaviorTrends ?? []), ...(report.fatigueAnalysis ?? [])];
-    const suggestions = [...(report.recommendations ?? []), ...(report.suggestions ?? [])];
-    const reportStatus = scoreStatus(report.score);
-    const scoreChanged = Math.abs(currentScore - report.score) > 5;
+    const reportStatus = scoreStatus(entry.reportScore);
+    const scoreChanged = currentScore !== null && Math.abs(currentScore - entry.reportScore) > 5;
 
     return (
-        <article style={{ background: "#ffffff", border: "1px solid #dbe3ef", borderRadius: "22px", boxShadow: "0 18px 45px rgba(15, 23, 42, 0.08)", padding: "24px" }}>
-            <div style={{ alignItems: "flex-start", display: "flex", gap: "16px", justifyContent: "space-between" }}>
-                <div style={{ display: "grid", gap: "14px" }}>
-                    <div>
-                        <p className="eyebrow">Current Monitoring Score</p>
-                        <h2 style={{ marginTop: 0 }}>{currentScore} / 100</h2>
-                        <p className="panel-helper">
-                            This reflects your latest VisionGuard monitoring score.
-                        </p>
-                    </div>
-                    <div>
-                        <p className="eyebrow">Report Snapshot Score</p>
-                        <h3 style={{ margin: "0 0 6px" }}>{report.score} / 100</h3>
-                        <p className="panel-helper">
-                            This report was generated from monitoring data at {generatedAt ? new Date(generatedAt).toLocaleString() : "the saved session"}.
-                        </p>
-                    </div>
+        <>
+        <div className="report-scroll-anchor" ref={reportTopRef} />
+        <article className="report-article">
+            <div className="report-overview">
+                <div>
+                    <p className="eyebrow">Report Score</p>
+                    <h2>{entry.reportScore} / 100</h2>
+                    <p className="panel-helper">
+                        This score was fixed when the report was generated.
+                    </p>
                 </div>
-                <span className={`status-badge ${reportStatus.className}`}>
-                    {reportStatus.label}
-                </span>
+                <div className="report-overview-meta">
+                    <span className={`status-badge ${statusClassName(reportStatus)}`}>Risk Level: {reportStatus}</span>
+                    <span className="report-meta-pill">Generated at: {formatGeneratedAt(entry.generatedAt)}</span>
+                    <span className="report-meta-pill">Data window: Latest monitoring data</span>
+                </div>
             </div>
 
             {scoreChanged && (
-                <div className="risk-notice highlighted" style={{ marginTop: "16px", whiteSpace: "normal" }}>
-                    Your latest monitoring score has changed since this report was generated. Generate a new report to refresh the analysis.
+                <div className="risk-notice highlighted report-stale-notice">
+                    Your live monitoring score has changed since this report was generated. Generate a new report to refresh the analysis.
                 </div>
             )}
 
-            <section className="report-section report-summary" style={{ marginTop: "16px" }}>
+            <section className="report-section report-summary">
                 <h3>Summary</h3>
-                <p>{report.summary}</p>
-                {report.trendInsight && <p>{report.trendInsight}</p>}
+                <p>{entry.report.summary}</p>
             </section>
 
-            <div className="ai-report-cards" style={{ marginTop: "16px" }}>
-                <ReportList title="Main Findings" items={mainFindings} />
-                <ReportList title="Risk Factors" items={riskFactors} />
-                <ReportList title="Suggestions" items={suggestions} />
+            <section className="report-section">
+                <h3>What this score means</h3>
+                <p>{entry.report.scoreMeaning}</p>
+            </section>
+
+            <div className="report-insight-grid">
+                <ReportList title="Main issue" items={[entry.report.mainIssue]} />
+                <ReportList title="What you are doing well" items={entry.report.whatIsGood} />
+                <ReportList title="What needs attention" items={entry.report.needsAttention} />
             </div>
 
-            <section className="report-section" style={{ marginTop: "16px" }}>
-                <h3>How to read these metrics</h3>
+            <section className="report-section">
+                <h3>Key Metrics</h3>
+                <KeyMetricsTable metrics={entry.report.metricExplanations} />
+            </section>
+
+            <section className="report-section">
+                <h3>Action Plan</h3>
+                <div className="report-action-grid">
+                    <ReportList title="Do now" items={entry.report.actionPlan.doNow} />
+                    <ReportList title="Improve today" items={entry.report.actionPlan.improveToday} />
+                    <ReportList title="Long-term habits" items={entry.report.actionPlan.longTermHabits} />
+                </div>
+            </section>
+
+            {showGuide && (
+                <>
+                <div className="report-scroll-anchor" ref={howToReadRef} />
+                <section className="report-section">
+                    <h3>How to read this report</h3>
+                    <ul>
+                        <li>Score is a screen-use behavior guide, not a diagnosis.</li>
+                        <li>Higher scores mean blinking, distance, lighting, and break rhythm are closer to recommended ranges.</li>
+                        <li>Low scores mean one or more signals are outside comfortable ranges long enough to need attention.</li>
+                        <li>Blink rate describes dryness risk, distance describes screen proximity, brightness describes lighting comfort, and session time describes break rhythm.</li>
+                    </ul>
+                </section>
+                </>
+            )}
+
+            <section className="report-section">
+                <h3>Prevention tips</h3>
                 <ul>
-                    <li>Blink rate shows how often you blink during screen use. Lower rates can mean your eyes may feel drier.</li>
-                    <li>Viewing distance describes how far you sit from the screen. A comfortable target is usually around an arm's length.</li>
-                    <li>Brightness reflects the surrounding light estimated from the camera. Very dim or glaring light can feel tiring.</li>
-                    <li>Session time shows how long the current screen-use period has lasted. Longer sessions benefit from short visual breaks.</li>
+                    {entry.report.preventionTips.map((tip) => (
+                        <li key={tip}>{tip}</li>
+                    ))}
                 </ul>
             </section>
 
-            <div className="risk-notice highlighted" style={{ marginTop: "16px", whiteSpace: "normal" }}>
-                Disclaimer: This is not a medical diagnosis. It is eye-care habit guidance based on VisionGuard activity patterns.
+            <div className="risk-notice highlighted report-disclaimer">
+                {entry.report.disclaimer}
             </div>
         </article>
+        </>
     );
 }
 
@@ -319,34 +685,71 @@ function ReportPage({ onOpenSettings }: ReportPageProps) {
     const { metrics, isMonitoring } = useMonitoring();
     const username = localStorage.getItem("visionguard_username") || "Katherine";
     const userInitial = username.charAt(0).toUpperCase();
-    const savedReport = readSavedReport();
-    const [report, setReport] = useState<AIReport | null>(() => savedReport?.report ?? null);
     const [reportConversation, setReportConversation] = useState(readReportConversationHistory);
     const [latestSharedMetrics, setLatestSharedMetrics] = useState(readLatestMetrics);
-    const [generatedAt, setGeneratedAt] = useState(() => savedReport?.generatedAt ?? "");
+    const [selectedReportId, setSelectedReportId] = useState(() => readSavedReport()?.id ?? "");
     const [loading, setLoading] = useState(false);
     const [notice, setNotice] = useState("");
+    const [showGuide, setShowGuide] = useState(false);
     const [hasMonitoringData, setHasMonitoringData] = useState(() => readMetricSamples().some((sample) => !sample.isCalibrating));
+    const reportTopRef = useRef<HTMLDivElement | null>(null);
+    const howToReadRef = useRef<HTMLDivElement | null>(null);
     const currentScore = isMonitoring
         ? metrics.eyeHealthScore
-        : numberOrNull(latestSharedMetrics?.eyeHealthScore) ?? report?.score ?? metrics.eyeHealthScore;
+        : numberOrNull(latestSharedMetrics?.eyeHealthScore) ?? numberOrNull(metrics.eyeHealthScore);
+
+    const scrollToReportTop = () => {
+        reportTopRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    };
+
+    const scrollToHowToRead = () => {
+        howToReadRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    };
 
     useEffect(() => {
         const refreshSavedReport = () => {
-            const savedReport = readSavedReport();
             setLatestSharedMetrics(readLatestMetrics());
             setReportConversation(readReportConversationHistory());
-            if (savedReport) {
-                setReport(savedReport.report);
-                setGeneratedAt(savedReport.generatedAt);
-            }
+            setHasMonitoringData(readMetricSamples().some((sample) => !sample.isCalibrating));
         };
 
         refreshSavedReport();
         return subscribeLocalData(refreshSavedReport);
     }, []);
 
-    const generateReport = async () => {
+    useEffect(() => {
+        if (reportConversation.length === 0) {
+            setSelectedReportId("");
+            return;
+        }
+        if (!selectedReportId || !reportConversation.some((entry) => entry.id === selectedReportId)) {
+            setSelectedReportId(reportConversation[0].id);
+        }
+    }, [reportConversation, selectedReportId]);
+
+    const selectedReport = useMemo(
+        () => reportConversation.find((entry) => entry.id === selectedReportId) ?? reportConversation[0] ?? null,
+        [reportConversation, selectedReportId],
+    );
+
+    const handleHowToRead = () => {
+        setShowGuide(true);
+        setTimeout(scrollToHowToRead, 80);
+    };
+
+    const handleSelectReport = (reportId: string) => {
+        setSelectedReportId(reportId);
+        setTimeout(scrollToReportTop, 80);
+    };
+
+    const handleGenerateReport = async () => {
+        if (loading) return;
         setLoading(true);
         setNotice("");
 
@@ -366,28 +769,34 @@ function ReportPage({ onOpenSettings }: ReportPageProps) {
             console.log("REPORT RESPONSE", data);
 
             if (data.report) {
-                const nextReport = normalizeReport(data.report);
                 const nextGeneratedAt = new Date().toISOString();
-                setReport(nextReport);
-                setGeneratedAt(nextGeneratedAt);
+                const reportScore = payload.eyeHealthScore ?? numberOrNull(data.report.score) ?? 0;
+                const normalizedReport = normalizeReport(data.report, payload.metricsSnapshot, Math.round(reportScore));
+                const nextEntry: ReportHistoryEntry = {
+                    id: `report-${Date.now()}`,
+                    prompt: REPORT_PROMPT_TEXT,
+                    report: normalizedReport,
+                    generatedAt: nextGeneratedAt,
+                    reportScore: Math.round(reportScore),
+                    riskLevel: riskLevelFromReport(data.report, Math.round(reportScore)),
+                    topRisk: topRiskFromMetrics(normalizedReport.metricExplanations),
+                    metricsSnapshot: payload.metricsSnapshot,
+                    remindersSnapshot: payload.remindersSnapshot,
+                };
+
                 setNotice(data.success ? "" : "The report was generated with backup guidance and saved here.");
 
                 try {
-                    const savedReport = persistVisibleReport(nextReport, nextGeneratedAt);
-                    setGeneratedAt(savedReport.generatedAt);
+                    saveLatestReport(nextEntry, nextGeneratedAt);
+                    const nextHistory = saveReportConversationEntry(nextEntry);
+                    setReportConversation(nextHistory);
+                    setSelectedReportId(nextEntry.id);
+                    setTimeout(scrollToReportTop, 100);
                 } catch (storageError) {
                     console.warn("Failed to save report locally:", storageError);
-                }
-
-                try {
-                    setReportConversation(saveReportConversationEntry({
-                        id: `report-${nextGeneratedAt}`,
-                        prompt: REPORT_PROMPT_TEXT,
-                        report: nextReport,
-                        generatedAt: nextGeneratedAt,
-                    }));
-                } catch (storageError) {
-                    console.warn("Failed to save report conversation locally:", storageError);
+                    setReportConversation((history) => [nextEntry, ...history.filter((item) => item.id !== nextEntry.id)].slice(0, 20));
+                    setSelectedReportId(nextEntry.id);
+                    setTimeout(scrollToReportTop, 100);
                 }
 
                 return;
@@ -408,69 +817,94 @@ function ReportPage({ onOpenSettings }: ReportPageProps) {
             <main className="dashboard-main">
                 <TopBar username={username} />
 
-                <div className="dashboard-content">
-                    <section className="panel">
-                        <div className="panel-header">
+                <div className="dashboard-content report-page-content">
+                    <section className="panel report-hero-panel">
+                        <div className="panel-header report-page-header">
                             <div>
                                 <p className="eyebrow">AI report</p>
                                 <h2>AI Eye-Care Report</h2>
                                 <p className="panel-helper">
-                                    This report uses blink rate, viewing distance, brightness, session time, score, and reminders to summarize your eye-care habits.
+                                    Generated from your VisionGuard monitoring data.
                                 </p>
+                            </div>
+                            <div className="report-header-actions">
+                                <button className="secondary-button" onClick={handleHowToRead} type="button">
+                                    How to read this report
+                                </button>
+                                <button className="primary-button report-button" disabled={loading} onClick={handleGenerateReport} type="button">
+                                    {loading ? "Generating..." : selectedReport ? "Regenerate report" : "Generate report"}
+                                </button>
                             </div>
                         </div>
                     </section>
 
-                    <section className="panel" style={{ background: "#f7f8fa", borderRadius: "18px" }}>
-                        <div style={{ display: "grid", gap: "18px" }}>
-                            {reportConversation.map((storedReport) => (
-                                <div key={storedReport.generatedAt} style={{ display: "grid", gap: "18px" }}>
-                                    <div style={{ alignItems: "flex-end", display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-                                    <div style={{ background: "#2563eb", borderRadius: "18px 18px 6px 18px", color: "#ffffff", fontWeight: 800, maxWidth: "520px", padding: "14px 18px" }}>
-                                        {storedReport.prompt}
-                                    </div>
-                                    <div style={{ alignItems: "center", background: "linear-gradient(135deg, #94a3b8, #475569)", borderRadius: "50%", color: "#ffffff", display: "flex", flex: "0 0 auto", fontWeight: 900, height: "40px", justifyContent: "center", width: "40px" }}>
-                                        {userInitial}
-                                    </div>
-                                    </div>
-                                    <ReportArticle
-                                        currentScore={currentScore}
-                                        generatedAt={storedReport.generatedAt}
-                                        report={storedReport.report}
-                                    />
-                                </div>
-                            ))}
-
-                            {!report && !loading && (
-                                <article style={{ background: "#ffffff", border: "1px solid #dbe3ef", borderRadius: "18px", color: "#475569", maxWidth: "760px", padding: "20px" }}>
-                                    {hasMonitoringData
-                                        ? "Generate your report when you are ready. Your latest monitoring pattern will be used."
-                                        : "No monitoring history is available yet. You can still generate a starter report, and it will become more useful after a short monitoring session."}
-                                </article>
-                            )}
-
-                            {loading && (
-                                <article style={{ background: "#ffffff", border: "1px solid #dbe3ef", borderRadius: "18px", color: "#475569", maxWidth: "760px", padding: "20px" }}>
-                                    Reviewing your eye-care patterns...
-                                </article>
-                            )}
-
-                            {notice && (
-                                <div className="risk-notice highlighted" style={{ whiteSpace: "normal" }}>
-                                    {notice}
-                                </div>
-                            )}
-
-                            {report && reportConversation.length === 0 && (
-                                <ReportArticle currentScore={currentScore} generatedAt={generatedAt} report={report} />
-                            )}
+                    <section className="panel report-workspace">
+                        <div className="report-user-prompt">
+                            <div className="report-user-bubble">Generate my eye health report</div>
+                            <div className="report-user-avatar">{userInitial}</div>
                         </div>
 
-                        <div style={{ borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", marginTop: "22px", paddingTop: "18px" }}>
-                            <button className="primary-button report-button" disabled={loading} onClick={generateReport} type="button">
-                                {loading ? "Generating..." : "Generate Report"}
+                        {!selectedReport && !loading && (
+                            <article className="report-empty-state">
+                                {hasMonitoringData
+                                    ? "Generate your report when you are ready. Your latest monitoring pattern will be used."
+                                    : "No monitoring history is available yet. You can still generate a starter report, and it will become more useful after a short monitoring session."}
+                            </article>
+                        )}
+
+                        {loading && (
+                            <article className="report-empty-state">
+                                Generating a new report from your latest monitoring data...
+                            </article>
+                        )}
+
+                        {notice && (
+                            <div className="risk-notice highlighted report-stale-notice">
+                                {notice}
+                            </div>
+                        )}
+
+                        {selectedReport && (
+                            <ReportArticle
+                                currentScore={currentScore}
+                                entry={selectedReport}
+                                howToReadRef={howToReadRef}
+                                reportTopRef={reportTopRef}
+                                showGuide={showGuide}
+                            />
+                        )}
+
+                        <div className="report-footer-actions">
+                            <Link className="secondary-button report-trend-link" to="/trend">
+                                View trend details
+                            </Link>
+                            <button className="primary-button report-button" disabled={loading} onClick={handleGenerateReport} type="button">
+                                {loading ? "Generating..." : "Generate new report"}
                             </button>
                         </div>
+                    </section>
+
+                    <section className="panel report-history-panel">
+                        <details>
+                            <summary>Report History</summary>
+                            <div className="report-history-list">
+                                {reportConversation.length > 0 ? reportConversation.map((entry) => (
+                                    <button
+                                        className={`report-history-item ${entry.id === selectedReport?.id ? "is-active" : ""}`}
+                                        key={entry.id}
+                                        onClick={() => handleSelectReport(entry.id)}
+                                        type="button"
+                                    >
+                                        <span>{formatGeneratedAt(entry.generatedAt)}</span>
+                                        <strong>{entry.reportScore}/100</strong>
+                                        <span>{entry.riskLevel}</span>
+                                        <span>{entry.topRisk}</span>
+                                    </button>
+                                )) : (
+                                    <p className="panel-helper">Generated reports will appear here.</p>
+                                )}
+                            </div>
+                        </details>
                     </section>
                 </div>
             </main>
