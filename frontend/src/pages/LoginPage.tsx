@@ -1,6 +1,46 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 
+import logo from "../assets/VGlogo.png";
+
+const loginProofs = [
+    "Real-time eye-use monitoring",
+    "DeepSeek-powered AI report",
+    "Daily trend and reminder review",
+];
+
+function AuthProductMock() {
+    return (
+        <div className="auth-device-visual" aria-label="VisionGuard product preview">
+            <div className="auth-device-window">
+                <div className="auth-device-topbar">
+                    <span />
+                    <span />
+                    <span />
+                </div>
+                <div className="auth-device-body">
+                    <div className="auth-device-score">
+                        <span>Eye Health Score</span>
+                        <strong>92</strong>
+                    </div>
+                    <div className="auth-device-report">
+                        <span className="auth-deepseek-badge">Powered by DeepSeek</span>
+                        <h3>DeepSeek AI Report</h3>
+                        <p>Readable summaries, risks, and practical next steps from monitoring data.</p>
+                    </div>
+                    <div className="auth-device-chart">
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function LoginPage() {
     const navigate = useNavigate();
     const [username, setUsername] = useState("");
@@ -12,34 +52,72 @@ function LoginPage() {
     }
 
     return (
-        <main className="page">
-            <section className="simple-card auth-card">
-                <p className="eyebrow">Login</p>
-                <h1>Welcome back</h1>
-                <p className="subtitle">Continue your eye-care monitoring journey.</p>
+        <main className="auth-experience-page">
+            <header className="auth-experience-nav">
+                <Link className="auth-experience-brand" to="/">
+                    <img src={logo} alt="VisionGuard logo" />
+                    <span>
+                        <strong>VisionGuard</strong>
+                        <small>DeepSeek-powered eye-care AI</small>
+                    </span>
+                </Link>
 
-                <label>Username or Email</label>
-                <input
-                    className="input"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value)}
-                    placeholder="Katherine"
-                />
+                <Link className="auth-experience-home" to="/">
+                    Back to home
+                </Link>
+            </header>
 
-                <label>Password</label>
-                <input className="input" type="password" placeholder="••••••••" />
+            <section className="auth-experience-shell">
+                <div className="auth-experience-hero">
+                    <div className="auth-experience-copy">
+                        <h1>Welcome back to VisionGuard.</h1>
+                        <p>
+                            Continue monitoring your screen habits and reviewing DeepSeek-powered daily eye-care
+                            guidance.
+                        </p>
+                    </div>
 
-                <button className="primary-button full-width" onClick={handleLogin}>
-                    Login
-                </button>
+                    <div className="auth-proof-list">
+                        {loginProofs.map((proof) => (
+                            <span key={proof}>{proof}</span>
+                        ))}
+                    </div>
 
-                <button className="secondary-button full-width" onClick={handleLogin}>
-                    Continue as Demo User
-                </button>
+                    <AuthProductMock />
+                </div>
 
-                <p className="small-text">
-                    Don’t have an account? <Link to="/register">Create one</Link>
-                </p>
+                <section className="auth-experience-form">
+                    <div className="auth-form-header">
+                        <span className="auth-deepseek-badge">Powered by DeepSeek</span>
+                        <h1>Sign in</h1>
+                        <p>Access your VisionGuard dashboard and daily eye-care report.</p>
+                    </div>
+
+                    <div className="auth-form">
+                        <label>Username or Email</label>
+                        <input
+                            className="input"
+                            value={username}
+                            onChange={(event) => setUsername(event.target.value)}
+                            placeholder="Katherine"
+                        />
+
+                        <label>Password</label>
+                        <input className="input" type="password" placeholder="••••••••" />
+
+                        <button className="primary-button full-width" onClick={handleLogin}>
+                            Login
+                        </button>
+
+                        <button className="secondary-button full-width" onClick={handleLogin}>
+                            Continue as Demo User
+                        </button>
+                    </div>
+
+                    <p className="auth-form-footer">
+                        New to VisionGuard? <Link to="/register">Create an account</Link>
+                    </p>
+                </section>
             </section>
         </main>
     );
