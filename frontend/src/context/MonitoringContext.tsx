@@ -15,7 +15,7 @@ import type { Reminder } from "../types/reminder";
 import { dateKey, saveMetricSample } from "../utils/metricsStorage";
 import { sendBrowserNotification } from "../utils/notification";
 import { evaluateReminders, resetReminderEngineState } from "../utils/reminderEngine";
-import { evaluateRisk, type RiskResult } from "../utils/riskEngine";
+import { evaluateRisk, resetScoreSettlementClock, type RiskResult } from "../utils/riskEngine";
 import { getCurrentUserId } from "../utils/user";
 
 const ANALYZE_INTERVAL_MS = 180;
@@ -213,6 +213,7 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
 
             setRawStream(stream);
             setIsMonitoring(true);
+            resetScoreSettlementClock();
             setIsStarting(false);
             setCardReminders([]);
             monitoringStartedAtRef.current = Date.now();

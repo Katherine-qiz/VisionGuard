@@ -4,8 +4,14 @@ import { localDateKey } from "./dateUtils";
 
 const SUSTAINED_STATE_KEY = "visionguard_sustained_state";
 const SCORE_MODEL_VERSION = 5;
-const DEFAULT_SCORE = 90;
-const SETTLEMENT_INTERVAL_MS = 60 * 1000;
+const DEFAULT_SCORE = 100;
+const SETTLEMENT_INTERVAL_MS = 30 * 1000;
+
+function debugScore(...args: unknown[]) {
+    if (import.meta.env.DEV) {
+        console.log(...args);
+    }
+}
 
 export type RiskItem = {
     type: ReminderType;
@@ -34,6 +40,7 @@ export type SustainedState = {
     lastSettlementAt?: number;
     settlementSnapshotTotal?: number;
     settlementSampleCount?: number;
+    goodSettlementStreak?: number;
     scoreDate?: string;
     scoreModelVersion?: number;
 };
@@ -85,7 +92,7 @@ const priority: Record<ReminderType, number> = {
 
 function readSustainedState(): SustainedState {
     try {
-        const rawValue = sessionStorage.getItem(SUSTAINED_STATE_KEY);
+        const rawValue = localStorage.getItem(SUSTAINED_STATE_KEY) ?? sessionStorage.getItem(SUSTAINED_STATE_KEY);
         return rawValue ? JSON.parse(rawValue) as SustainedState : {};
     } catch {
         return {};
@@ -94,9 +101,10 @@ function readSustainedState(): SustainedState {
 
 function writeSustainedState(state: SustainedState) {
     try {
+        localStorage.setItem(SUSTAINED_STATE_KEY, JSON.stringify(state));
         sessionStorage.setItem(SUSTAINED_STATE_KEY, JSON.stringify(state));
     } catch {
-        // Session storage can be unavailable in constrained environments.
+        // Storage can be unavailable in constrained environments.
     }
 }
 
@@ -248,57 +256,166 @@ function settleDailyScore(state: SustainedState, liveBehaviorScore: number, now:
         return state.dailyScore;
     }
 
-    const settlementCount = Math.floor((now - state.lastSettlementAt) / SETTLEMENT_INTERVAL_MS);
-    if (settlementCount <= 0) {
+    const rawSettlementCount = Math.floor((now - state.lastSettlementAt) / SETTLEMENT_INTERVAL_MS);
+    if (rawSettlementCount <= 0) {
         return state.dailyScore ?? DEFAULT_SCORE;
+    }
+
+    if (rawSettlementCount > 3) {
+        state.lastSettlementAt = now;
+        state.settlementSnapshotTotal = liveBehaviorScore;
+        state.settlementSampleCount = 1;
+        state.goodSettlementStreak = 0;
+        debugScore("[Score Debug] skipped catch-up settlement after pause", {
+            dailyScore: state.dailyScore ?? DEFAULT_SCORE,
+            liveBehaviorScore,
+            rawSettlementCount,
+            goodSettlementStreak: state.goodSettlementStreak,
+            lastSettlementAt: state.lastSettlementAt,
+        });
+        return state.dailyScore ?? DEFAULT_SCORE;
+    }
+
+    const settlementCount = Math.min(rawSettlementCount, 1);
+    if (rawSettlementCount > settlementCount) {
+        debugScore("[Score Debug] settlementCount capped", {
+            rawSettlementCount,
+            settlementCount,
+            lastSettlementAt: state.lastSettlementAt,
+        });
     }
 
     const averageSnapshotScore = state.settlementSampleCount
         ? state.settlementSnapshotTotal / state.settlementSampleCount
         : liveBehaviorScore;
-    const settlementDelta = averageSnapshotScore >= 90
-        ? 2
-        : averageSnapshotScore >= 80
-          ? 1
-          : averageSnapshotScore >= 70
-            ? 0
-            : averageSnapshotScore >= 50
-              ? -1
-              : -2;
-    state.dailyScore = clampScore((state.dailyScore ?? DEFAULT_SCORE) + (settlementDelta * settlementCount));
+    let settlementDelta = 0;
+    if (averageSnapshotScore < 50) {
+        settlementDelta = -3;
+    } else if (averageSnapshotScore < 70) {
+        settlementDelta = -2;
+    } else if (averageSnapshotScore < 80) {
+        settlementDelta = -1;
+    }
+
+    if (settlementDelta < 0) {
+        state.dailyScore = clampScore((state.dailyScore ?? DEFAULT_SCORE) + (settlementDelta * settlementCount));
+        state.goodSettlementStreak = 0;
+    } else if (averageSnapshotScore >= 90) {
+        state.goodSettlementStreak = (state.goodSettlementStreak ?? 0) + settlementCount;
+        if (state.goodSettlementStreak >= 3) {
+            state.dailyScore = clampScore((state.dailyScore ?? DEFAULT_SCORE) + 1);
+            state.goodSettlementStreak = 0;
+            settlementDelta = 1;
+        } else {
+            state.dailyScore = state.dailyScore ?? DEFAULT_SCORE;
+        }
+    } else {
+        state.dailyScore = state.dailyScore ?? DEFAULT_SCORE;
+        state.goodSettlementStreak = 0;
+    }
+
     state.lastSettlementAt += settlementCount * SETTLEMENT_INTERVAL_MS;
     state.settlementSnapshotTotal = 0;
     state.settlementSampleCount = 0;
+    debugScore("[Score Debug] daily score settlement", {
+        dailyScore: state.dailyScore,
+        liveBehaviorScore,
+        averageSnapshotScore: Math.round(averageSnapshotScore),
+        settlementDelta,
+        goodSettlementStreak: state.goodSettlementStreak ?? 0,
+        lastSettlementAt: state.lastSettlementAt,
+    });
     return state.dailyScore;
+}
+
+export function resetScoreSettlementClock(now = Date.now()) {
+    const state = readSustainedState();
+    state.lastSettlementAt = now;
+    state.settlementSnapshotTotal = 0;
+    state.settlementSampleCount = 0;
+    state.goodSettlementStreak = 0;
+    writeSustainedState(state);
+    debugScore("[Score Debug] reset settlement clock on monitoring start", {
+        dailyScore: state.dailyScore,
+        lastSettlementAt: state.lastSettlementAt,
+        goodSettlementStreak: state.goodSettlementStreak,
+    });
 }
 
 export function resetSustainedRiskState() {
     try {
-        sessionStorage.removeItem(SUSTAINED_STATE_KEY);
+        const today = localDateKey();
+        const state = readSustainedState();
+        writeSustainedState({
+            currentScore: state.currentScore,
+            dailyScore: typeof state.dailyScore === "number" ? state.dailyScore : DEFAULT_SCORE,
+            lastScoreUpdatedAt: state.lastScoreUpdatedAt,
+            lastSettlementAt: state.lastSettlementAt,
+            settlementSnapshotTotal: state.settlementSnapshotTotal,
+            settlementSampleCount: state.settlementSampleCount,
+            goodSettlementStreak: state.goodSettlementStreak,
+            scoreDate: state.scoreDate ?? today,
+            scoreModelVersion: state.scoreModelVersion ?? SCORE_MODEL_VERSION,
+        });
     } catch {
         // Ignore storage failures.
     }
 }
 
-export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult {
-    const state = readSustainedState();
-    const today = localDateKey(now);
-    if (state.scoreModelVersion !== SCORE_MODEL_VERSION || state.scoreDate !== today) {
+function ensureTodayScoreState(state: SustainedState, today: string, now: number) {
+    if (state.scoreDate !== today) {
         state.currentScore = DEFAULT_SCORE;
         state.dailyScore = DEFAULT_SCORE;
         state.lastScoreUpdatedAt = now;
         state.lastSettlementAt = undefined;
         state.settlementSnapshotTotal = undefined;
         state.settlementSampleCount = undefined;
+        state.goodSettlementStreak = undefined;
         state.scoreDate = today;
-        state.scoreModelVersion = SCORE_MODEL_VERSION;
+        debugScore("[Score Debug] reset score because date changed", {
+            dailyScore: state.dailyScore,
+            lastSettlementAt: state.lastSettlementAt,
+            goodSettlementStreak: state.goodSettlementStreak ?? 0,
+        });
+    } else {
+        state.dailyScore = typeof state.dailyScore === "number" ? state.dailyScore : DEFAULT_SCORE;
+        debugScore("[Score Debug] reused today score", {
+            dailyScore: state.dailyScore,
+            lastSettlementAt: state.lastSettlementAt,
+            goodSettlementStreak: state.goodSettlementStreak ?? 0,
+        });
     }
+
+    if (state.scoreModelVersion !== SCORE_MODEL_VERSION) {
+        state.scoreModelVersion = SCORE_MODEL_VERSION;
+        debugScore("[Score Debug] updated score model version without resetting today score", {
+            dailyScore: state.dailyScore,
+            lastSettlementAt: state.lastSettlementAt,
+            goodSettlementStreak: state.goodSettlementStreak ?? 0,
+            scoreModelVersion: state.scoreModelVersion,
+        });
+        writeSustainedState(state);
+    }
+}
+
+export function evaluateRisk(metrics: EyeMetrics, now = Date.now()): RiskResult {
+    const state = readSustainedState();
+    const today = localDateKey(now);
+    ensureTodayScoreState(state, today, now);
 
     const risks: RiskItem[] = [];
     const blinkWindowSeconds = metrics.blinkWindowSeconds ?? 0;
     const isBlinkCalibrating = metrics.isCalibrating ?? blinkWindowSeconds < 30;
     if (isBlinkCalibrating) {
         const calibrationScore = state.dailyScore ?? DEFAULT_SCORE;
+        debugScore("[Score Debug] calibration keeps existing score", {
+            dailyScore: calibrationScore,
+            liveBehaviorScore: 100,
+            averageSnapshotScore: 100,
+            settlementDelta: 0,
+            goodSettlementStreak: state.goodSettlementStreak ?? 0,
+            lastSettlementAt: state.lastSettlementAt,
+        });
         writeSustainedState(state);
 
         return {

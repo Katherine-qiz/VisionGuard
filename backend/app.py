@@ -650,10 +650,10 @@ class EyeFatigueMonitor:
         self.ear_samples.append(ear)
         if len(self.ear_samples) >= 50:
             sorted_samples = sorted(self.ear_samples)
-            self.ear_baseline = sorted_samples[int(len(sorted_samples) * 0.7)]
+            self.ear_baseline = sorted_samples[int(len(sorted_samples) * 0.75)]
 
-        close_threshold = self.ear_baseline * 0.82
-        open_threshold = self.ear_baseline * 0.92
+        close_threshold = self.ear_baseline * 0.88
+        open_threshold = self.ear_baseline * 0.95
         self.last_blink_threshold = close_threshold
 
         if len(self.eye_state_history) < 3:
@@ -671,7 +671,7 @@ class EyeFatigueMonitor:
             if self.blink_start_time:
                 blink_duration = time.time() - self.blink_start_time
                 self.blink_start_time = None
-                return 0.04 <= blink_duration <= 0.8
+                return 0.03 <= blink_duration <= 1.0
             return False
 
         if self.is_blinking and self.blink_start_time:
