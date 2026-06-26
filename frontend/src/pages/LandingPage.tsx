@@ -26,7 +26,8 @@ const signalStats = [
     ["Blink rhythm", "Recent 60s estimate"],
     ["Viewing distance", "Comfort range 50-100 cm"],
     ["Ambient light", "Target 300-750 lux"],
-    ["Focus duration", "Break-aware sessions"],
+    ["Focus duration", "Current focus session"],
+    ["Daily screen time", "Tracked total today"],
 ];
 
 const workflowSteps = [
@@ -291,8 +292,11 @@ function LandingPage() {
 
             <section className="signal-section" data-reveal>
                 <div className="signal-heading">
-                    <h2>Four signals. One calmer screen routine.</h2>
-                    <p>VisionGuard understands screen habits through real-time behavioral signals.</p>
+                    <h2>Five signals. One calmer screen routine.</h2>
+                    <p>
+                        VisionGuard understands screen habits through real-time behavior signals and daily screen-time
+                        context.
+                    </p>
                 </div>
                 <div className="signal-grid">
                     {signalStats.map(([title, description]) => (
@@ -346,7 +350,7 @@ function LandingPage() {
                 <div className="marketing-footer-inner">
                     <BrandLogo />
                     <div className="marketing-footer-links">
-                        <a href="#features">Product</a>
+                        <a href="#features">Features</a>
                         <a href="#ai-guidance">AI Guidance</a>
                         <a href="#privacy">Privacy</a>
                         <a href="mailto:qiz7712222@gmail.com">Contact</a>
