@@ -30,16 +30,10 @@ const signalStats = [
 ];
 
 const workflowSteps = [
-    ["01", "Capture", "Real-time eye-use signals are collected during active monitoring."],
-    ["02", "Analyze", "VisionGuard evaluates blink rhythm, distance, light, and focus duration."],
-    ["03", "Interpret", "AI turns the data into plain-language explanations and risk context."],
-    ["04", "Guide", "Users receive reminders, reports, and action plans for healthier routines."],
-];
-
-const processSteps = [
-    ["01", "Monitor", "VisionGuard tracks eye-use signals while you work."],
-    ["02", "Understand", "AI summaries translate behavior data into plain-language insights."],
-    ["03", "Improve", "Small reminders help users build healthier screen routines."],
+    ["Capture", "Real-time eye-use signals are collected during active monitoring."],
+    ["Analyze", "VisionGuard evaluates blink rhythm, distance, light, and focus duration."],
+    ["Interpret", "AI turns the data into plain-language explanations and risk context."],
+    ["Guide", "Users receive reminders, reports, and action plans for healthier routines."],
 ];
 
 const productMoments = [
@@ -48,41 +42,16 @@ const productMoments = [
     ["Routine guidance", "Use light-touch reminders to protect focus without breaking your work rhythm."],
 ];
 
-const productShots = [
-    {
-        label: "Dashboard",
-        title: "Real-time eye-use monitoring",
-        description: "Track blink rate, viewing distance, brightness, use time, and live reminders from one dashboard.",
-        variant: "dashboard",
-        large: true,
-    },
-    {
-        label: "AI Report",
-        title: "DeepSeek-powered AI report",
-        description: "Generate plain-language summaries from your latest monitoring data.",
-        variant: "report",
-    },
-    {
-        label: "Trend",
-        title: "Seven-day behavior review",
-        description: "Review daily scores, reminders, common risks, and behavior changes over time.",
-        variant: "trend",
-    },
-];
-
 const privacyPrinciples = [
     [
-        "01",
         "Local camera preview",
         "Your monitoring view is designed to stay close to your device experience.",
     ],
     [
-        "02",
-        "Behavior guidance, not medical diagnosis",
+        "Behavioral guidance, not medical diagnosis",
         "VisionGuard explains everyday screen habits and does not replace professional eye-care advice.",
     ],
     [
-        "03",
         "Designed for calmer routines",
         "Use reminders, reports, and action plans to build healthier screen habits over time.",
     ],
@@ -120,7 +89,7 @@ function BrandLogo() {
             <img src={logo} alt="VisionGuard logo" />
             <span>
                 <strong>VisionGuard</strong>
-                <small>DeepSeek-powered eye-care AI</small>
+                <small>AI-powered eye-care monitoring</small>
             </span>
         </Link>
     );
@@ -129,27 +98,28 @@ function BrandLogo() {
 function ProductPreview() {
     return (
         <div className="product-preview" aria-label="VisionGuard product preview">
-            <div className="preview-topline">
+            <div className="preview-surface-head">
                 <span>Eye Health Score</span>
                 <strong>92</strong>
             </div>
-            <div className="preview-center">
-                <div className="score-ring">
+            <div className="preview-surface-body">
+                <div className="score-ring" aria-hidden="true">
                     <span>Good</span>
                 </div>
-                <div className="preview-ai">
-                    <span>AI Insight</span>
-                    <p>Your recent blink rhythm is lower than your usual baseline during long focus sessions.</p>
+                <div className="preview-surface-copy">
+                    <div>
+                        <span>AI Insight</span>
+                        <p>Your recent blink rhythm is lower than your usual baseline during long focus sessions.</p>
+                    </div>
+                    <div>
+                        <span>Recommended Action</span>
+                        <p>Take a 20-second visual break and sit slightly farther from your screen.</p>
+                    </div>
+                    <div>
+                        <span>Daily AI Report</span>
+                        <p>Review plain-language risk context and tomorrow's healthier routine plan.</p>
+                    </div>
                 </div>
-            </div>
-            <div className="preview-action">
-                <span>Recommended Action</span>
-                <p>Take a 20-second visual break and sit slightly farther from your screen.</p>
-            </div>
-            <div className="preview-report">
-                <span>Daily AI Report Preview</span>
-                <p>Main issue: Blink rate decreased after continuous screen use.</p>
-                <p>Next step: Review your daily AI report after this session.</p>
             </div>
         </div>
     );
@@ -181,105 +151,12 @@ function AIReportPreview() {
                     <dt>Needs attention</dt>
                     <dd>Blink rhythm dropped during focused work sessions.</dd>
                 </div>
-            </dl>
-            <ol>
-                <li>Take a short visual reset.</li>
-                <li>Keep your screen at arm's length.</li>
-                <li>Review your daily AI report after each session.</li>
-            </ol>
-        </div>
-    );
-}
-
-function ProductShotMock({ variant }: { variant: string }) {
-    return (
-        <div className={`product-shot-mock ${variant}`} aria-hidden="true">
-            <div className="mock-sidebar">
-                <span />
-                <span />
-                <span />
-            </div>
-            <div className="mock-screen">
-                <div className="mock-topbar">
-                    <span />
-                    <strong>{variant === "report" ? "AI Report" : variant === "trend" ? "Trend" : "Dashboard"}</strong>
+                <div>
+                    <dt>Action plan</dt>
+                    <dd>Take a short visual reset, keep your screen at arm's length, and review the daily report.</dd>
                 </div>
-                {variant === "dashboard" && (
-                    <>
-                        <div className="mock-dashboard-main">
-                            <div className="mock-camera" />
-                            <div className="mock-score">
-                                <strong>92</strong>
-                                <span>Good</span>
-                            </div>
-                        </div>
-                        <div className="mock-metrics">
-                            <span />
-                            <span />
-                            <span />
-                        </div>
-                    </>
-                )}
-                {variant === "report" && (
-                    <>
-                        <div className="mock-report-score">89 / 100</div>
-                        <div className="mock-report-lines">
-                            <span />
-                            <span />
-                            <span />
-                        </div>
-                        <div className="mock-report-badge">DeepSeek</div>
-                    </>
-                )}
-                {variant === "trend" && (
-                    <>
-                        <div className="mock-trend-bars">
-                            <span />
-                            <span />
-                            <span />
-                            <span />
-                            <span />
-                        </div>
-                        <div className="mock-trend-summary">
-                            <span />
-                            <span />
-                        </div>
-                    </>
-                )}
-            </div>
+            </dl>
         </div>
-    );
-}
-
-function ProductShowcase() {
-    return (
-        <section className="product-showcase-section" data-reveal>
-            <div className="product-showcase-heading">
-                <span>Product preview</span>
-                <h2>Built from a real monitoring workflow.</h2>
-                <p>
-                    VisionGuard connects live eye-use monitoring, DeepSeek-powered reports, and trend review into one
-                    complete MVP experience.
-                </p>
-            </div>
-
-            <div className="product-showcase-grid">
-                {productShots.map((shot) => (
-                    <article
-                        className={`product-shot ${shot.large ? "product-shot-large" : ""}`}
-                        key={shot.label}
-                    >
-                        <div className="product-shot-label">{shot.label}</div>
-                        <ProductShotMock variant={shot.variant} />
-                        <h3>{shot.title}</h3>
-                        <p>{shot.description}</p>
-                    </article>
-                ))}
-            </div>
-            <p className="product-showcase-note">
-                DeepSeek helps translate monitoring data into summaries, risks, and practical next steps.
-            </p>
-        </section>
     );
 }
 
@@ -349,7 +226,6 @@ function LandingPage() {
                     <p>
                         VisionGuard tracks your eye-use behavior in real time and turns blink rhythm, viewing
                         distance, lighting, and focus time into AI-powered reminders, reports, and daily guidance.
-                        Powered by DeepSeek, VisionGuard turns eye-use signals into readable daily guidance.
                     </p>
                     <div className="hero-actions">
                         <Link className="primary-button marketing-button" to="/login">
@@ -365,8 +241,22 @@ function LandingPage() {
                 </div>
             </section>
 
+            <section className="feature-story-section" id="features" data-reveal>
+                <div className="section-heading">
+                    <h2>Understand your screen habits before they become fatigue.</h2>
+                </div>
+                <div className="feature-row-list">
+                    {featureRows.map((feature) => (
+                        <article className="feature-row" key={feature.title}>
+                            <span aria-hidden="true" />
+                            <h3>{feature.title}</h3>
+                            <p>{feature.description}</p>
+                        </article>
+                    ))}
+                </div>
+            </section>
+
             <section className="ai-guidance-section" id="ai-guidance" data-reveal>
-                <AIReportPreview />
                 <div className="ai-guidance-copy">
                     <h2>From raw signals to AI-powered guidance.</h2>
                     <p>
@@ -379,18 +269,21 @@ function LandingPage() {
                         screen habits. It does not replace professional eye-care advice.
                     </p>
                 </div>
+                <AIReportPreview />
             </section>
 
-            <section className="feature-story-section" id="features" data-reveal>
+            <ProductNarrative />
+
+            <section className="workflow-section" data-reveal>
                 <div className="section-heading">
-                    <h2>Understand your screen habits before they become fatigue.</h2>
+                    <h2>How VisionGuard uses AI</h2>
                 </div>
-                <div className="feature-row-list">
-                    {featureRows.map((feature, index) => (
-                        <article className="feature-row" key={feature.title}>
-                            <span>{String(index + 1).padStart(2, "0")}</span>
-                            <h3>{feature.title}</h3>
-                            <p>{feature.description}</p>
+                <div className="workflow-line">
+                    {workflowSteps.map(([title, description]) => (
+                        <article className="workflow-step" key={title}>
+                            <span aria-hidden="true" />
+                            <h3>{title}</h3>
+                            <p>{description}</p>
                         </article>
                     ))}
                 </div>
@@ -412,51 +305,20 @@ function LandingPage() {
                 </div>
             </section>
 
-            <ProductShowcase />
-
-            <ProductNarrative />
-
-            <section className="workflow-section" data-reveal>
-                <div className="section-heading">
-                    <h2>How VisionGuard uses AI</h2>
-                </div>
-                <div className="workflow-line">
-                    {workflowSteps.map(([number, title, description]) => (
-                        <article className="workflow-step" key={number}>
-                            <span>{number}</span>
-                            <h3>{title}</h3>
-                            <p>{description}</p>
-                        </article>
-                    ))}
-                </div>
-            </section>
-
-            <section className="process-section" data-reveal>
-                <div className="process-preview" aria-hidden="true">
-                    <div className="mini-score">92</div>
-                    <div className="mini-lines">
-                        <span />
-                        <span />
-                        <span />
-                    </div>
-                    <div className="mini-orbit" />
-                </div>
-                <div className="process-copy">
-                    <h2>From monitoring to meaningful daily guidance.</h2>
-                    <div className="process-timeline">
-                        {processSteps.map(([, title, description]) => (
-                            <article className="process-step" key={title}>
-                                <h3>{title}</h3>
-                                <p>{description}</p>
-                            </article>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
             <section className="privacy-section" id="privacy" data-reveal>
+                <div className="privacy-copy">
+                    <h2>Built for everyday digital wellness.</h2>
+                    <p>
+                        Privacy-conscious local monitoring, behavior guidance, and daily summaries for healthier
+                        screen routines.
+                    </p>
+                    <p className="privacy-boundary">
+                        AI guidance, not medical diagnosis. VisionGuard provides behavioral insights for everyday
+                        screen habits. It does not replace professional eye-care advice.
+                    </p>
+                </div>
                 <div className="privacy-principles">
-                    {privacyPrinciples.map(([, title, description]) => (
+                    {privacyPrinciples.map(([title, description]) => (
                         <article className="privacy-row" key={title}>
                             <span aria-hidden="true" />
                             <div>
@@ -465,13 +327,6 @@ function LandingPage() {
                             </div>
                         </article>
                     ))}
-                </div>
-                <div className="privacy-copy">
-                    <h2>Built for everyday digital wellness.</h2>
-                    <p>
-                        Privacy-conscious local monitoring, behavior guidance, and daily summaries for healthier
-                        screen routines.
-                    </p>
                 </div>
             </section>
 
@@ -488,13 +343,16 @@ function LandingPage() {
             </section>
 
             <footer className="marketing-footer">
-                <BrandLogo />
-                <div>
-                    <a href="#features">Product</a>
-                    <Link to="/privacy">Privacy</Link>
-                    <a href="mailto:qiz7712222@gmail.com">Contact</a>
+                <div className="marketing-footer-inner">
+                    <BrandLogo />
+                    <div className="marketing-footer-links">
+                        <a href="#features">Product</a>
+                        <a href="#ai-guidance">AI Guidance</a>
+                        <a href="#privacy">Privacy</a>
+                        <a href="mailto:qiz7712222@gmail.com">Contact</a>
+                    </div>
+                    <p>© 2026 VisionGuard. All rights reserved.</p>
                 </div>
-                <p>© 2026 VisionGuard. All rights reserved.</p>
             </footer>
         </main>
     );

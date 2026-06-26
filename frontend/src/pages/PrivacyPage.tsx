@@ -1,6 +1,7 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import logo from "../assets/VGlogo.png";
+import robotIllustration from "../assets/robot.png";
 
 const privacyPrinciples = [
     [
@@ -27,20 +28,31 @@ const privacyDetails = [
 
 function PrivacyPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const from = searchParams.get("from");
 
-    function handleConsent() {
-        localStorage.setItem("visionguard_camera_consent", "true");
-        navigate("/dashboard");
+    function handleUnderstand() {
+        if (from === "login") {
+            navigate("/login");
+            return;
+        }
+
+        if (from === "register") {
+            navigate("/register");
+            return;
+        }
+
+        navigate("/");
     }
 
     return (
-        <main className="privacy-experience-page">
-            <header className="auth-experience-nav">
+        <main className="auth-split-page">
+            <header className="auth-split-nav">
                 <Link className="auth-experience-brand" to="/">
                     <img src={logo} alt="VisionGuard logo" />
                     <span>
                         <strong>VisionGuard</strong>
-                        <small>DeepSeek-powered eye-care AI</small>
+                        <small>AI-powered eye-care monitoring</small>
                     </span>
                 </Link>
 
@@ -49,57 +61,64 @@ function PrivacyPage() {
                 </Link>
             </header>
 
-            <section className="privacy-experience-shell">
-                <div className="privacy-experience-hero">
-                    <div className="privacy-experience-copy">
-                        <span>Privacy-first design</span>
-                        <h1>Eyecare guidance starts with privacy.</h1>
-                        <p>
-                            VisionGuard is designed to monitor everyday screen-use behavior without turning camera
-                            access into a clinical or surveillance experience.
-                        </p>
-                    </div>
+            <section className="auth-split-layout privacy-split-layout">
+                <aside className="auth-visual-panel privacy-visual-panel">
+                    <div className="auth-visual-inner">
+                        <div className="privacy-experience-copy">
+                            <h1>Privacy-first screen habit guidance.</h1>
+                            <p>
+                                VisionGuard focuses on behavior signals and daily guidance without storing raw camera
+                                frames.
+                            </p>
+                        </div>
 
-                    <div className="privacy-device-visual" aria-label="Privacy visual">
-                        <div className="privacy-shield">
-                            <div className="privacy-eye">
-                                <span />
+                        <div className="auth-proof-list">
+                            <span>Local camera preview</span>
+                            <span>Numerical metrics only</span>
+                            <span>Guidance, not diagnosis</span>
+                        </div>
+
+                        <div className="auth-hero-art privacy-hero-art" aria-hidden="true">
+                            <img className="auth-hero-icon" src={robotIllustration} alt="" />
+                        </div>
+                    </div>
+                </aside>
+
+                <section className="auth-content-panel privacy-content-panel">
+                    <div className="auth-privacy-shell">
+                        <div className="auth-form-header privacy-content-header">
+                            <h1>Review privacy and camera-use notice</h1>
+                            <p>
+                                Before using VisionGuard&apos;s camera-based monitoring, please review how the product
+                                handles eye-use behavior signals.
+                            </p>
+                        </div>
+
+                        <div className="privacy-principle-row">
+                            {privacyPrinciples.map(([title, description]) => (
+                                <article className="privacy-consent-row" key={title}>
+                                    <h2>{title}</h2>
+                                    <p>{description}</p>
+                                </article>
+                            ))}
+                        </div>
+
+                        <div className="privacy-disclosure">
+                            <div>
+                                <h2>What VisionGuard keeps clear</h2>
                             </div>
+                            <ul>
+                                {privacyDetails.map((detail) => (
+                                    <li key={detail}>{detail}</li>
+                                ))}
+                            </ul>
                         </div>
-                        <div className="privacy-visual-copy">
-                            <strong>Local preview</strong>
-                            <p>Camera access supports behavior estimation while raw frames stay out of storage.</p>
-                        </div>
+
+                        <button className="primary-button privacy-consent-button" onClick={handleUnderstand}>
+                            I understand
+                        </button>
                     </div>
-                </div>
-
-                <div className="privacy-principle-row">
-                    {privacyPrinciples.map(([title, description]) => (
-                        <article key={title}>
-                            <h2>{title}</h2>
-                            <p>{description}</p>
-                        </article>
-                    ))}
-                </div>
-
-                <div className="privacy-disclosure">
-                    <div>
-                        <h2>What VisionGuard keeps clear</h2>
-                        <p>
-                            DeepSeek helps translate monitoring data into readable summaries, risks, and practical next
-                            steps. AI guidance is not medical diagnosis.
-                        </p>
-                    </div>
-                    <ul>
-                        {privacyDetails.map((detail) => (
-                            <li key={detail}>{detail}</li>
-                        ))}
-                    </ul>
-                </div>
-
-                <button className="primary-button privacy-consent-button" onClick={handleConsent}>
-                    I understand and allow camera access
-                </button>
+                </section>
             </section>
         </main>
     );
