@@ -16,6 +16,7 @@ import { dateKey, saveMetricSample } from "../utils/metricsStorage";
 import { sendBrowserNotification } from "../utils/notification";
 import { evaluateReminders, resetReminderEngineState } from "../utils/reminderEngine";
 import { evaluateRisk, resetScoreSettlementClock, type RiskResult } from "../utils/riskEngine";
+import { normalizeMetrics } from "../utils/normalizeMetrics";
 import { getCurrentUserId } from "../utils/user";
 
 const ANALYZE_INTERVAL_MS = 180;
@@ -130,13 +131,14 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
 
         fetchEyeMetrics()
             .then((data) => {
-                const nextRiskResult = evaluateRisk(data);
-                setMetrics({
-                    ...data,
+                const normalizedData = normalizeMetrics(data);
+                const nextRiskResult = evaluateRisk(normalizedData);
+                setMetrics(normalizeMetrics({
+                    ...normalizedData,
                     debugBackendScore: data.debugBackendScore ?? data.eyeHealthScore,
                     eyeHealthScore: nextRiskResult.displayScore,
                     scoreLevel: nextRiskResult.scoreLevel,
-                });
+                }));
                 setRiskResult(nextRiskResult);
             })
             .catch((err) => {
@@ -190,6 +192,7 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
         isAnalyzingRef.current = false;
         setCardReminders([]);
         resetReminderEngineState();
+        void resetAnalyzerSession();
 
         setRawStream((stream) => {
             stream?.getTracks().forEach((track) => track.stop());
@@ -219,9 +222,6 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
             monitoringStartedAtRef.current = Date.now();
             lastSampleSavedAtRef.current = 0;
             resetReminderEngineState();
-            void resetAnalyzerSession().catch((err) => {
-                console.warn("[Monitoring] backend reset failed, monitoring continues", err);
-            });
 
             if ("Notification" in window && Notification.permission === "default") {
                 const permission = await Notification.requestPermission();
@@ -299,18 +299,19 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
                     setProcessedFrame(result.processedFrame);
                 }
 
-                const nextRiskResult = evaluateRisk(result);
+                const normalizedResult = normalizeMetrics(result);
+                const nextRiskResult = evaluateRisk(normalizedResult);
                 console.log("[Reminder Debug] risk evaluation", {
-                    isCalibrating: result.isCalibrating,
+                    isCalibrating: normalizedResult.isCalibrating,
                     risks: nextRiskResult.risks,
                     reminders: nextRiskResult.reminders,
                 });
-                const scoredMetrics: EyeMetrics = {
-                    ...result,
+                const scoredMetrics: EyeMetrics = normalizeMetrics({
+                    ...normalizedResult,
                     debugBackendScore: result.debugBackendScore ?? result.eyeHealthScore,
                     eyeHealthScore: nextRiskResult.displayScore,
                     scoreLevel: nextRiskResult.scoreLevel,
-                };
+                });
 
                 setMetrics(scoredMetrics);
                 setRiskResult(nextRiskResult);

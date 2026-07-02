@@ -4,8 +4,6 @@ import { saveReminderEvent } from "./reminderStorage";
 
 const HISTORY_COOLDOWNS_KEY = "visionguard_reminder_history_cooldowns";
 const BROWSER_COOLDOWNS_KEY = "visionguard_reminder_browser_cooldowns";
-const DISTANCE_SUSTAINED_MS = 10 * 1000;
-const BLINK_SUSTAINED_MS = 90 * 1000;
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const TWENTY_MINUTES_MS = 20 * 60 * 1000;
 
@@ -170,14 +168,12 @@ export function evaluateReminders(
             TWENTY_MINUTES_MS,
         );
         activeCardReminders.push(cardReminder);
-        if (continuousUseTimeSeconds >= 25 * 60) {
-            addBrowserReminder(
-                browserReminders,
-                { ...cardReminder, id: `use_time-notification-${now}`, deliveryMethod: "browser_notification" },
-                now,
-                options.allowFocusedNotification,
-            );
-        }
+        addBrowserReminder(
+            browserReminders,
+            { ...cardReminder, id: `use_time-notification-${now}`, deliveryMethod: "browser_notification" },
+            now,
+            options.allowFocusedNotification,
+        );
     }
 
     if (metrics.distanceCm > 0 && (metrics.distanceCm < 50 || metrics.distanceCm > 100)) {
@@ -196,14 +192,12 @@ export function evaluateReminders(
         );
         activeCardReminders.push(cardReminder);
 
-        if (isWarningDistance && now - conditionStartedAt.distance >= DISTANCE_SUSTAINED_MS) {
-            addBrowserReminder(
-                browserReminders,
-                { ...cardReminder, id: `distance-notification-${now}`, deliveryMethod: "browser_notification" },
-                now,
-                options.allowFocusedNotification,
-            );
-        }
+        addBrowserReminder(
+            browserReminders,
+            { ...cardReminder, id: `distance-notification-${now}`, deliveryMethod: "browser_notification" },
+            now,
+            options.allowFocusedNotification,
+        );
     } else {
         delete conditionStartedAt.distance;
     }
@@ -226,14 +220,12 @@ export function evaluateReminders(
             FIVE_MINUTES_MS,
         );
         activeCardReminders.push(cardReminder);
-        if (isWarningBlink && now - conditionStartedAt.blink >= BLINK_SUSTAINED_MS) {
-            addBrowserReminder(
-                browserReminders,
-                { ...cardReminder, id: `blink-notification-${now}`, deliveryMethod: "browser_notification" },
-                now,
-                options.allowFocusedNotification,
-            );
-        }
+        addBrowserReminder(
+            browserReminders,
+            { ...cardReminder, id: `blink-notification-${now}`, deliveryMethod: "browser_notification" },
+            now,
+            options.allowFocusedNotification,
+        );
     } else {
         delete conditionStartedAt.blink;
     }
@@ -249,25 +241,30 @@ export function evaluateReminders(
             FIVE_MINUTES_MS,
         );
         activeCardReminders.push(cardReminder);
-        if (isWarningBrightness) {
-            addBrowserReminder(
-                browserReminders,
-                { ...cardReminder, id: `brightness-notification-${now}`, deliveryMethod: "browser_notification" },
-                now,
-                options.allowFocusedNotification,
-            );
-        }
+        addBrowserReminder(
+            browserReminders,
+            { ...cardReminder, id: `brightness-notification-${now}`, deliveryMethod: "browser_notification" },
+            now,
+            options.allowFocusedNotification,
+        );
     }
 
     if (!metrics.faceDetected) {
-        activeCardReminders.push(makeReminder(
+        const cardReminder = makeReminder(
             "face",
             "🙂 Camera lost your face",
             "Adjust your camera angle so VisionGuard can estimate your viewing habits.",
             "info",
             "card",
             FIVE_MINUTES_MS,
-        ));
+        );
+        activeCardReminders.push(cardReminder);
+        addBrowserReminder(
+            browserReminders,
+            { ...cardReminder, id: `face-notification-${now}`, deliveryMethod: "browser_notification" },
+            now,
+            options.allowFocusedNotification,
+        );
     }
 
     recordReminderEvents(activeCardReminders, metrics, now, options.userId);

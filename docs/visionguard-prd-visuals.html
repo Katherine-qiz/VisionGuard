@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionGuard PRD Visual Assets</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --paper: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d8e1ec;
+      --strong-line: #aebccd;
+      --blue: #eaf3ff;
+      --blue-line: #9ec5f0;
+      --yellow: #fff7df;
+      --yellow-line: #e8cf87;
+      --purple: #f2ecff;
+      --purple-line: #cab8ef;
+      --orange: #fff0e4;
+      --orange-line: #efbd91;
+      --green: #eaf8f0;
+      --green-line: #a7d8bc;
+      --gray: #edf2f7;
+      --gray-line: #b8c4d2;
+      --danger: #fff1f2;
+      --danger-line: #f4a3ad;
+      --shadow: 0 18px 50px rgba(30, 41, 59, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      width: min(1200px, calc(100vw - 48px));
+      margin: 34px auto 56px;
+    }
+
+    .hero {
+      padding: 30px 34px;
+      border: 1px solid #e5ebf3;
+      border-radius: 24px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      box-shadow: var(--shadow);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .hero p {
+      max-width: 780px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .section {
+      margin-top: 24px;
+      padding: 24px;
+      border: 1px solid #e5ebf3;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 12px 34px rgba(30, 41, 59, 0.06);
+    }
+
+    .section-head {
+      margin-bottom: 18px;
+    }
+
+    .section-kicker {
+      margin: 0 0 4px;
+      color: #3b82f6;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .section-desc {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .capture-card {
+      padding: 18px;
+      border: 1px solid #e3eaf3;
+      border-radius: 20px;
+      background: #fbfdff;
+    }
+
+    .tag-list,
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .chip,
+    .tag-list li {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid #dbe4ef;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .architecture {
+      display: grid;
+      gap: 12px;
+    }
+
+    .arch-layer {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 14px;
+      padding: 13px;
+      border: 2px solid var(--layer-line);
+      border-radius: 22px;
+      background: var(--layer-bg);
+    }
+
+    .arch-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 68px;
+      border: 1px solid rgba(100, 116, 139, 0.18);
+      border-radius: 17px;
+      background: rgba(255, 255, 255, 0.6);
+      color: #334155;
+      font-size: 19px;
+      font-weight: 760;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .arch-app {
+      --layer-bg: var(--blue);
+      --layer-line: var(--blue-line);
+    }
+
+    .arch-business {
+      --layer-bg: var(--yellow);
+      --layer-line: var(--yellow-line);
+    }
+
+    .arch-service {
+      --layer-bg: var(--purple);
+      --layer-line: var(--purple-line);
+    }
+
+    .arch-data {
+      --layer-bg: var(--orange);
+      --layer-line: var(--orange-line);
+    }
+
+    .arch-server {
+      --layer-bg: var(--gray);
+      --layer-line: var(--gray-line);
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grid-app {
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+    }
+
+    .grid-business {
+      grid-template-columns: repeat(4, minmax(175px, 1fr));
+    }
+
+    .grid-service {
+      grid-template-columns: repeat(5, minmax(145px, 1fr));
+    }
+
+    .grid-server {
+      grid-template-columns: repeat(3, minmax(190px, 1fr));
+    }
+
+    .mini-card,
+    .module-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 4px 14px rgba(30, 41, 59, 0.04);
+    }
+
+    .mini-card {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 10px 12px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 680;
+      text-align: center;
+    }
+
+    .module-card {
+      padding: 12px;
+    }
+
+    .module-card h3 {
+      margin: 0 0 8px;
+      color: #243447;
+      font-size: 15px;
+      font-weight: 760;
+    }
+
+    .core-card {
+      border-color: #72aee9;
+      background: linear-gradient(180deg, #ffffff 0%, #f2f8ff 100%);
+      box-shadow: 0 10px 24px rgba(59, 130, 246, 0.15);
+    }
+
+    .core-card h3 {
+      color: #1d4f91;
+    }
+
+    .core-card .tag-list li,
+    .metric-chip {
+      border-color: #bfdbfe;
+      background: #eaf3ff;
+      color: #1e4e8c;
+    }
+
+    .data-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .data-panel {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.88);
+    }
+
+    .data-panel h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    .data-items {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(110px, 1fr));
+      gap: 8px;
+    }
+
+    .data-item {
+      padding: 9px 10px;
+      border: 1px solid #e1e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 650;
+      text-align: center;
+    }
+
+    .shared-source {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--green-line);
+      border-radius: 999px;
+      background: var(--green);
+      color: #246144;
+      font-size: 15px;
+      font-weight: 760;
+      text-align: center;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.2fr) minmax(220px, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .flow-column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .flow-title {
+      margin: 0 0 4px;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 760;
+      text-align: center;
+    }
+
+    .flow-node {
+      position: relative;
+      min-height: 46px;
+      padding: 11px 12px;
+      border: 1px solid #cdd8e6;
+      border-radius: 14px;
+      background: #ffffff;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(30, 41, 59, 0.04);
+    }
+
+    .flow-node::after {
+      content: "↓";
+      position: absolute;
+      left: 50%;
+      bottom: -22px;
+      transform: translateX(-50%);
+      color: #94a3b8;
+      font-weight: 760;
+      z-index: 1;
+    }
+
+    .flow-node:last-child::after,
+    .flow-branch .flow-node::after {
+      display: none;
+    }
+
+    .decision {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 84px;
+      margin: 6px auto;
+      width: 152px;
+      border: 2px solid #f0b35f;
+      border-radius: 22px;
+      background: #fff7df;
+      transform: rotate(45deg);
+    }
+
+    .decision span {
+      display: block;
+      transform: rotate(-45deg);
+      font-size: 13px;
+      font-weight: 760;
+      text-align: center;
+    }
+
+    .flow-branch {
+      padding: 12px;
+      border: 1px dashed #b6c4d4;
+      border-radius: 18px;
+      background: #f8fbff;
+    }
+
+    .success {
+      border-color: var(--green-line);
+      background: var(--green);
+    }
+
+    .failed {
+      border-color: var(--danger-line);
+      background: var(--danger);
+    }
+
+    .metrics-line {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 5px;
+      margin-top: 8px;
+    }
+
+    .metrics-line span {
+      padding: 4px 6px;
+      border-radius: 8px;
+      background: #eaf3ff;
+      color: #1e4e8c;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .choice-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .site-map {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1.1fr 1.25fr 0.85fr;
+      gap: 18px;
+      align-items: center;
+      min-height: 360px;
+    }
+
+    .map-group {
+      display: grid;
+      gap: 12px;
+    }
+
+    .map-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+      text-align: center;
+    }
+
+    .page-node {
+      padding: 14px 12px;
+      border: 1px solid #cfd9e6;
+      border-radius: 16px;
+      background: #ffffff;
+      text-align: center;
+      box-shadow: 0 4px 14px rgba(30, 41, 59, 0.05);
+    }
+
+    .page-node h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    .page-node p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dashboard-node {
+      border: 2px solid var(--blue-line);
+      background: var(--blue);
+      transform: scale(1.04);
+    }
+
+    .privacy-node {
+      border-style: dashed;
+      background: #f8fafc;
+    }
+
+    .map-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .map-arrow::before,
+    .map-arrow::after {
+      content: "";
+      flex: 1;
+      border-top: 1px solid #c7d2df;
+    }
+
+    .map-arrow span {
+      padding: 0 8px;
+      white-space: nowrap;
+    }
+
+    .dashed-links {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .dashed-links div {
+      padding: 7px 8px;
+      border: 1px dashed #bdc8d7;
+      border-radius: 10px;
+      color: #64748b;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #dfe7f1;
+      border-radius: 18px;
+      background: #ffffff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 12px 13px;
+      border-bottom: 1px solid #e6edf5;
+      border-right: 1px solid #eef2f7;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: 0;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    td {
+      color: #475569;
+    }
+
+    .priority {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef6ff;
+      color: #2563eb;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .prototype-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .prototype-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .wireframe {
+      overflow: hidden;
+      border: 1px solid #cfd9e6;
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 6px 18px rgba(30, 41, 59, 0.05);
+    }
+
+    .wire-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 36px;
+      padding: 0 12px;
+      border-bottom: 1px solid #d9e2ee;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .wire-body {
+      display: grid;
+      min-height: 440px;
+      background: #fbfdff;
+    }
+
+    .wire-dashboard {
+      grid-template-columns: 78px 1fr;
+    }
+
+    .wire-sidebar {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      padding: 12px 8px;
+      border-right: 1px solid #d9e2ee;
+      background: #f1f5f9;
+    }
+
+    .wire-nav {
+      height: 18px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .wire-main {
+      padding: 12px;
+    }
+
+    .wire-grid {
+      display: grid;
+      gap: 9px;
+    }
+
+    .wire-score {
+      min-height: 62px;
+      border: 1px solid #b8c4d2;
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .wire-metrics {
+      grid-template-columns: repeat(5, 1fr);
+    }
+
+    .wire-box {
+      min-height: 46px;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #ffffff;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .wire-media {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .wire-camera {
+      min-height: 104px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px dashed #94a3b8;
+      border-radius: 12px;
+      background: #f8fafc;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .wire-reminders {
+      grid-template-columns: 1.15fr 0.85fr;
+    }
+
+    .wire-list {
+      display: grid;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    .wire-row {
+      height: 16px;
+      border-radius: 7px;
+      background: #e2e8f0;
+    }
+
+    .wire-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      border: 1px solid #93c5fd;
+      border-radius: 12px;
+      background: #eaf3ff;
+      color: #1e4e8c;
+      font-size: 12px;
+      font-weight: 760;
+      text-align: center;
+    }
+
+    .wire-page {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      min-height: 440px;
+    }
+
+    .wire-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .wire-title {
+      height: 26px;
+      width: 38%;
+      border-radius: 8px;
+      background: #dbe4ef;
+    }
+
+    .wire-picker {
+      height: 26px;
+      width: 32%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      background: #ffffff;
+    }
+
+    .wire-chart {
+      position: relative;
+      min-height: 76px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background:
+        linear-gradient(135deg, transparent 45%, #cbd5e1 46%, #cbd5e1 48%, transparent 49%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    .wire-bars {
+      display: flex;
+      align-items: end;
+      justify-content: space-around;
+      min-height: 76px;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    .wire-bars span {
+      width: 16px;
+      border-radius: 5px 5px 0 0;
+      background: #bfdbfe;
+    }
+
+    .wire-bars span:nth-child(1) { height: 32px; }
+    .wire-bars span:nth-child(2) { height: 50px; }
+    .wire-bars span:nth-child(3) { height: 42px; }
+    .wire-bars span:nth-child(4) { height: 62px; }
+    .wire-bars span:nth-child(5) { height: 54px; }
+
+    .wire-table {
+      display: grid;
+      gap: 5px;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    .wire-table-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5px;
+    }
+
+    .wire-cell {
+      min-height: 16px;
+      border-radius: 6px;
+      background: #e2e8f0;
+    }
+
+    .prototype-note {
+      border: 1px solid #dfe7f1;
+      border-radius: 14px;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .prototype-note h3 {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid #e6edf5;
+      background: #f8fafc;
+      font-size: 14px;
+      font-weight: 760;
+    }
+
+    .prototype-note dl {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 0;
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .prototype-note dt,
+    .prototype-note dd {
+      margin: 0;
+      padding: 8px 10px;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .prototype-note dt {
+      color: #334155;
+      font-weight: 760;
+      background: #fbfdff;
+    }
+
+    .prototype-note dd {
+      color: #64748b;
+    }
+
+    .prototype-note dt:last-of-type,
+    .prototype-note dd:last-of-type {
+      border-bottom: 0;
+    }
+
+    .vg-column {
+      background: #eaf3ff;
+      color: #1e4e8c;
+      font-weight: 700;
+    }
+
+    @media (max-width: 1100px) {
+      .grid-app,
+      .grid-business,
+      .grid-service,
+      .grid-server,
+      .prototype-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow,
+      .site-map {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100vw - 24px, 1200px);
+        margin: 18px auto 36px;
+      }
+
+      .hero,
+      .section {
+        padding: 18px;
+      }
+
+      .arch-layer {
+        grid-template-columns: 1fr;
+      }
+
+      .grid-app,
+      .grid-business,
+      .grid-service,
+      .grid-server,
+      .data-wrap,
+      .data-items,
+      .prototype-grid,
+      .choice-row,
+      .wire-metrics,
+      .wire-media,
+      .wire-reminders {
+        grid-template-columns: 1fr;
+      }
+
+      .wire-dashboard {
+        grid-template-columns: 1fr;
+      }
+
+      .wire-sidebar {
+        grid-template-columns: repeat(4, 1fr);
+        border-right: 0;
+        border-bottom: 1px solid #d9e2ee;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <h1>VisionGuard PRD Visual Assets</h1>
+      <p>用于补充产品需求文档的可视化附录，集中展示产品架构、用户流程、页面跳转、功能说明、低保真原型、用户痛点与竞品对比。</p>
+    </header>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 1</p>
+        <h2>产品整体架构图</h2>
+        <p class="section-desc">从应用层到服务器层展示 VisionGuard 的产品模块、服务能力、数据沉淀和部署关系。</p>
+      </div>
+      <div class="capture-card architecture">
+        <section class="arch-layer arch-app">
+          <div class="arch-label">应用层</div>
+          <div class="grid grid-app">
+            <div class="mini-card">PC Web App</div>
+            <div class="mini-card">Landing</div>
+            <div class="mini-card">Login / Register</div>
+            <div class="mini-card">Dashboard</div>
+            <div class="mini-card">Trend</div>
+            <div class="mini-card">AI Report</div>
+            <div class="mini-card">Settings</div>
+            <div class="mini-card">Privacy</div>
+          </div>
+        </section>
+
+        <section class="arch-layer arch-business">
+          <div class="arch-label">业务层</div>
+          <div class="grid grid-business">
+            <article class="module-card">
+              <h3>用户账号模块</h3>
+              <ul class="tag-list"><li>登录</li><li>注册</li><li>用户信息</li></ul>
+            </article>
+            <article class="module-card">
+              <h3>实时监测模块</h3>
+              <ul class="tag-list"><li>摄像头启动</li><li>校准状态</li><li>检测状态</li></ul>
+            </article>
+            <article class="module-card core-card">
+              <h3>核心指标模块</h3>
+              <ul class="tag-list"><li>Blink Rate</li><li>Distance</li><li>Brightness</li><li>Session Time</li><li>Daily Load</li></ul>
+            </article>
+            <article class="module-card">
+              <h3>用眼评分模块</h3>
+              <ul class="tag-list"><li>Daily Score</li><li>Risk Level</li></ul>
+            </article>
+            <article class="module-card">
+              <h3>智能提醒模块</h3>
+              <ul class="tag-list"><li>Blink Reminder</li><li>Distance Reminder</li><li>Brightness Reminder</li><li>Rest Reminder</li><li>Daily Load Reminder</li></ul>
+            </article>
+            <article class="module-card">
+              <h3>趋势分析模块</h3>
+              <ul class="tag-list"><li>Today Overview</li><li>7-day Trend</li><li>Date Picker</li></ul>
+            </article>
+            <article class="module-card">
+              <h3>AI Report 模块</h3>
+              <ul class="tag-list"><li>Generate Report</li><li>Key Findings</li><li>Recommendations</li><li>Action Plan</li><li>Report History</li></ul>
+            </article>
+            <article class="module-card">
+              <h3>设置与隐私模块</h3>
+              <ul class="tag-list"><li>Camera Permission</li><li>Notification Permission</li><li>Clear Data</li><li>Privacy Notice</li></ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="arch-layer arch-service">
+          <div class="arch-label">基础服务层</div>
+          <div class="grid grid-service">
+            <div class="mini-card">用户服务 User Service</div>
+            <div class="mini-card">摄像头权限服务 Camera Permission</div>
+            <div class="mini-card">浏览器通知服务 Notification Service</div>
+            <div class="mini-card">视觉检测服务 CV Detection</div>
+            <div class="mini-card">指标计算服务 Metrics Engine</div>
+            <div class="mini-card">评分规则服务 Score Engine</div>
+            <div class="mini-card">提醒规则服务 Reminder Engine</div>
+            <div class="mini-card">数据同步服务 Data Sync</div>
+            <div class="mini-card">AI 报告服务 Report API</div>
+            <div class="mini-card">隐私与安全服务 Privacy &amp; Safety</div>
+          </div>
+        </section>
+
+        <section class="arch-layer arch-data">
+          <div class="arch-label">数据层</div>
+          <div>
+            <div class="data-wrap">
+              <article class="data-panel">
+                <h3>数据处理能力</h3>
+                <div class="data-items">
+                  <div class="data-item">数据采集</div>
+                  <div class="data-item">异常过滤</div>
+                  <div class="data-item">每日汇总</div>
+                  <div class="data-item">数据快照</div>
+                  <div class="data-item">数据同步</div>
+                </div>
+              </article>
+              <article class="data-panel">
+                <h3>业务数据</h3>
+                <div class="data-items">
+                  <div class="data-item">users</div>
+                  <div class="data-item">metrics_stream</div>
+                  <div class="data-item">metrics_daily</div>
+                  <div class="data-item">reminders</div>
+                  <div class="data-item">reports</div>
+                  <div class="data-item">data_snapshot</div>
+                </div>
+              </article>
+            </div>
+            <div class="shared-source">统一数据源：Dashboard / Trend / AI Report 共用</div>
+          </div>
+        </section>
+
+        <section class="arch-layer arch-server">
+          <div class="arch-label">服务器层</div>
+          <div class="grid grid-server">
+            <div class="mini-card">前端服务：React + TypeScript + Vite</div>
+            <div class="mini-card">后端服务：Flask API</div>
+            <div class="mini-card">视觉检测：OpenCV + MediaPipe</div>
+            <div class="mini-card">数据存储：localStorage / SQLite</div>
+            <div class="mini-card">AI 服务：DeepSeek API</div>
+            <div class="mini-card">部署环境：Localhost / Cloud Server / HTTPS</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 2</p>
+        <h2>用户主流程图</h2>
+        <p class="section-desc">展示用户从进入产品、授权摄像头、完成校准，到查看趋势和生成报告的主路径。</p>
+      </div>
+      <div class="capture-card flow">
+        <div class="flow-column">
+          <p class="flow-title">进入与账号</p>
+          <div class="flow-node">打开 VisionGuard</div>
+          <div class="flow-node">进入 Landing Page</div>
+          <div class="flow-node">点击 Get Started</div>
+          <div class="flow-node">Login / Register</div>
+          <div class="flow-node">进入 Dashboard</div>
+          <div class="flow-node">点击 Start</div>
+          <div class="flow-node">请求摄像头权限</div>
+        </div>
+        <div class="flow-column">
+          <p class="flow-title">权限判断</p>
+          <div class="decision"><span>是否授权摄像头</span></div>
+          <div class="flow-branch failed">
+            <p class="flow-title">未授权</p>
+            <div class="flow-node failed">显示权限提示</div>
+            <div class="flow-node failed">引导用户重新授权</div>
+          </div>
+          <div class="flow-branch success">
+            <p class="flow-title">已授权</p>
+            <div class="flow-node success">进入 Calibration 校准阶段</div>
+            <div class="flow-node success">进入实时监测
+              <div class="metrics-line">
+                <span>Blink Rate</span><span>Distance</span><span>Brightness</span><span>Session Time</span><span>Daily Load</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-column">
+          <p class="flow-title">监测与输出</p>
+          <div class="flow-node">Dashboard 展示 5 个核心指标和 Daily Score</div>
+          <div class="flow-node">系统判断是否触发 Reminder</div>
+          <div class="flow-node">用户后续操作
+            <div class="choice-row">
+              <span class="chip">查看 Trend</span>
+              <span class="chip">生成 AI Report</span>
+              <span class="chip">进入 Settings</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 3</p>
+        <h2>页面跳转图</h2>
+        <p class="section-desc">以站点地图形式展示 VisionGuard 的入口页、核心功能页与全局隐私页之间的跳转关系。</p>
+      </div>
+      <div class="capture-card site-map">
+        <div class="map-group">
+          <p class="map-label">入口区</p>
+          <div class="page-node"><h3>Landing</h3><p>Get Started / Privacy</p></div>
+          <div class="page-node"><h3>Login</h3><p>登录成功 / Create Account</p></div>
+          <div class="page-node"><h3>Register</h3><p>注册成功 / Already have account</p></div>
+        </div>
+        <div class="map-arrow"><span>Register 或 Login 后进入</span></div>
+        <div class="map-group">
+          <p class="map-label">核心工作台</p>
+          <div class="page-node dashboard-node"><h3>Dashboard</h3><p>Trend / Generate Report / Settings / Privacy</p></div>
+          <div class="map-arrow"><span>功能导航</span></div>
+          <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="page-node"><h3>Trend</h3><p>View AI Report / Dashboard</p></div>
+            <div class="page-node"><h3>AI Report</h3><p>Dashboard / Trend / Settings</p></div>
+            <div class="page-node"><h3>Settings</h3><p>Privacy / Dashboard</p></div>
+          </div>
+        </div>
+        <div class="map-group">
+          <p class="map-label">全局可访问</p>
+          <div class="page-node privacy-node"><h3>Privacy</h3><p>Landing / Login / Register / Dashboard / Settings</p></div>
+          <div class="dashed-links">
+            <div>Landing → Privacy</div>
+            <div>Login / Register → Privacy</div>
+            <div>Dashboard / Settings → Privacy</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 4</p>
+        <h2>功能详细说明表</h2>
+        <p class="section-desc">明确各业务模块的输入、输出、优先级与验收标准，便于研发和测试对齐范围。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>模块</th><th>功能点</th><th>说明</th><th>输入</th><th>输出</th><th>优先级</th><th>验收标准</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>用户账号模块</td><td>登录 / 注册</td><td>用户通过账号进入产品主流程</td><td>邮箱、密码</td><td>登录状态、用户信息</td><td><span class="priority">P0</span></td><td>用户可以成功进入 Dashboard，失败时显示错误提示</td></tr>
+            <tr><td>实时监测模块</td><td>摄像头启动与检测</td><td>用户授权摄像头后，系统开始检测用眼行为</td><td>摄像头画面</td><td>检测状态、实时指标</td><td><span class="priority">P0</span></td><td>点击 Start 后摄像头正常启动，并显示检测状态</td></tr>
+            <tr><td>核心指标模块</td><td>5 个核心指标</td><td>展示 Blink Rate、Distance、Brightness、Session Time、Daily Load</td><td>后端检测结果、时间累计数据</td><td>5 个核心指标</td><td><span class="priority">P0</span></td><td>Dashboard 同时展示 5 个指标，且页面切换后不异常清零</td></tr>
+            <tr><td>用眼评分模块</td><td>Daily Score / Risk Level</td><td>基于实时行为计算当天用眼评分和风险等级</td><td>5 个核心指标</td><td>Daily Score、Risk Level</td><td><span class="priority">P0</span></td><td>校准阶段不计分，Start / Pause 不重置当日分数</td></tr>
+            <tr><td>智能提醒模块</td><td>Reminder</td><td>当指标低于 Good 标准时触发提醒</td><td>实时指标、提醒规则</td><td>页面提醒、浏览器通知</td><td><span class="priority">P0</span></td><td>异常指标触发对应提醒，浏览器通知有冷却机制</td></tr>
+            <tr><td>趋势分析模块</td><td>Trend</td><td>展示今日和近 7 日用眼数据</td><td>metrics_daily、reminders</td><td>趋势图、日期数据、提醒统计</td><td><span class="priority">P1</span></td><td>Trend 展示 5 个指标的历史变化，且数据与 Dashboard 一致</td></tr>
+            <tr><td>AI Report 模块</td><td>AI Report</td><td>基于真实数据生成结构化用眼报告</td><td>当前或指定日期数据快照</td><td>Summary、Key Findings、Recommendations、Action Plan</td><td><span class="priority">P1</span></td><td>报告引用 5 个核心指标，不混淆 Session Time 和 Daily Load</td></tr>
+            <tr><td>设置与隐私模块</td><td>Settings / Privacy</td><td>管理权限、数据清除和隐私说明</td><td>用户设置、权限状态</td><td>设置结果、隐私说明</td><td><span class="priority">P1</span></td><td>清除数据前有确认提示，Privacy 页面说明摄像头和数据使用方式</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 5</p>
+        <h2>低保真原型图</h2>
+        <p class="section-desc">以线框图形式展示 Dashboard、Trend 和 AI Report 的核心信息布局，便于 PRD 中说明页面结构。</p>
+      </div>
+      <div class="prototype-grid">
+        <article class="prototype-card">
+          <div class="wireframe">
+            <div class="wire-topbar"><span>VisionGuard</span><span>Topbar</span></div>
+            <div class="wire-body wire-dashboard">
+              <aside class="wire-sidebar">
+                <div class="wire-nav"></div><div class="wire-nav"></div><div class="wire-nav"></div><div class="wire-nav"></div>
+              </aside>
+              <main class="wire-main wire-grid">
+                <div class="wire-score">Daily Score / Risk Level</div>
+                <div class="wire-grid wire-metrics">
+                  <div class="wire-box">Blink Rate</div><div class="wire-box">Distance</div><div class="wire-box">Brightness</div><div class="wire-box">Session Time</div><div class="wire-box">Daily Load</div>
+                </div>
+                <div class="wire-grid wire-media">
+                  <div class="wire-camera">Camera View</div>
+                  <div class="wire-camera">Processed View / Detection Status</div>
+                </div>
+                <div class="wire-grid wire-reminders">
+                  <div class="wire-list"><div class="wire-row"></div><div class="wire-row"></div><div class="wire-row"></div><div class="wire-row"></div></div>
+                  <div class="wire-button">Generate Report</div>
+                </div>
+              </main>
+            </div>
+          </div>
+          <div class="prototype-note">
+            <h3>Dashboard 模块说明</h3>
+            <dl>
+              <dt>核心内容</dt><dd>Daily Score、5 个指标、摄像头视图、检测状态、Reminder Cards。</dd>
+              <dt>关键要求</dt><dd>Session Time 与 Daily Load 分开显示，提醒区域保持明显。</dd>
+              <dt>主要入口</dt><dd>Start / Pause、Trend、Generate Report、Settings。</dd>
+            </dl>
+          </div>
+        </article>
+
+        <article class="prototype-card">
+          <div class="wireframe">
+            <div class="wire-page">
+              <div class="wire-title-row"><div class="wire-title"></div><div class="wire-picker"></div></div>
+              <div class="wire-box">Today Overview</div>
+              <div class="wire-chart">7-Day Score Trend</div>
+              <div class="wire-grid" style="grid-template-columns: repeat(2, 1fr);">
+                <div class="wire-chart">Blink Rate Trend</div>
+                <div class="wire-chart">Distance Trend</div>
+                <div class="wire-chart">Brightness Trend</div>
+                <div class="wire-chart">Session Time Trend</div>
+              </div>
+              <div class="wire-bars"><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="wire-grid wire-reminders">
+                <div class="wire-list"><div class="wire-row"></div><div class="wire-row"></div><div class="wire-row"></div></div>
+                <div class="wire-button">View AI Report</div>
+              </div>
+            </div>
+          </div>
+          <div class="prototype-note">
+            <h3>Trend 模块说明</h3>
+            <dl>
+              <dt>核心内容</dt><dd>Date Picker、Today Overview、7-Day Score Trend、5 Metrics Trend。</dd>
+              <dt>关键要求</dt><dd>Session Time 使用独立趋势模块，Daily Load 使用柱状图占位。</dd>
+              <dt>主要入口</dt><dd>View AI Report、Dashboard。</dd>
+            </dl>
+          </div>
+        </article>
+
+        <article class="prototype-card">
+          <div class="wireframe">
+            <div class="wire-page">
+              <div class="wire-title-row"><div class="wire-title"></div><div class="wire-button" style="min-height: 30px; width: 38%;">Generate Report</div></div>
+              <div class="wire-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="wire-score">Current Score</div>
+                <div class="wire-score">Risk Level</div>
+              </div>
+              <div class="wire-list"><div class="wire-row"></div><div class="wire-row"></div><div class="wire-row"></div></div>
+              <div class="wire-table">
+                <div class="wire-table-row"><div class="wire-cell"></div><div class="wire-cell"></div><div class="wire-cell"></div></div>
+                <div class="wire-table-row"><div class="wire-cell"></div><div class="wire-cell"></div><div class="wire-cell"></div></div>
+                <div class="wire-table-row"><div class="wire-cell"></div><div class="wire-cell"></div><div class="wire-cell"></div></div>
+                <div class="wire-table-row"><div class="wire-cell"></div><div class="wire-cell"></div><div class="wire-cell"></div></div>
+                <div class="wire-table-row"><div class="wire-cell"></div><div class="wire-cell"></div><div class="wire-cell"></div></div>
+              </div>
+              <div class="wire-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="wire-box">Key Findings</div><div class="wire-box">Recommendations</div><div class="wire-box">Action Plan</div>
+              </div>
+              <div class="wire-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="wire-list"><div class="wire-row"></div><div class="wire-row"></div></div>
+                <div class="wire-box">Non-medical Disclaimer</div>
+              </div>
+            </div>
+          </div>
+          <div class="prototype-note">
+            <h3>AI Report 模块说明</h3>
+            <dl>
+              <dt>核心内容</dt><dd>Current Score、Risk Level、Summary、Key Metrics、History、Disclaimer。</dd>
+              <dt>关键要求</dt><dd>Key Metrics 包含 5 个核心指标，并区分 Current Session 与 Daily Overview。</dd>
+              <dt>主要入口</dt><dd>Generate Report、Dashboard、Trend、Settings。</dd>
+            </dl>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 6</p>
+        <h2>用户痛点表</h2>
+        <p class="section-desc">围绕学习、办公、创作、夜间使用和隐私顾虑梳理用户问题与产品机会。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>用户场景</th><th>用户痛点</th><th>具体表现</th><th>产品机会</th><th>对应功能</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>学习 / 写论文</td><td>连续用眼过久</td><td>用户专注学习时容易忘记休息</td><td>提供即时休息提醒</td><td>Session Time、Rest Reminder</td></tr>
+            <tr><td>办公 / 编程</td><td>眨眼频率下降</td><td>长时间盯屏导致眨眼减少，用户自己难以察觉</td><td>实时监测眨眼频率并提醒</td><td>Blink Rate、Blink Reminder</td></tr>
+            <tr><td>设计 / 内容创作</td><td>距离和坐姿不稳定</td><td>用户可能长时间靠近屏幕处理细节</td><td>识别距离过近并提醒调整</td><td>Distance、Distance Reminder</td></tr>
+            <tr><td>夜间学习 / 办公</td><td>环境亮度不合适</td><td>过暗或过亮环境下使用屏幕，容易造成不适</td><td>监测亮度并提供调整建议</td><td>Brightness、Brightness Reminder</td></tr>
+            <tr><td>高强度屏幕使用</td><td>不清楚全天累计负荷</td><td>用户知道当前用了多久，但不清楚今天累计屏幕使用时长</td><td>统计当日累计使用时长</td><td>Daily Load、Trend、AI Report</td></tr>
+            <tr><td>复盘用眼习惯</td><td>缺少长期趋势反馈</td><td>用户无法判断自己的用眼习惯是否改善</td><td>提供历史趋势和 AI 报告</td><td>Trend、AI Report</td></tr>
+            <tr><td>摄像头产品使用</td><td>隐私顾虑</td><td>用户担心摄像头画面和个人数据被不当使用</td><td>明确说明数据使用边界</td><td>Privacy、Settings、Clear Data</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="section-kicker">Section 7</p>
+        <h2>竞品对比表</h2>
+        <p class="section-desc">对比普通休息提醒工具、系统级屏幕健康功能、专业眼健康检测设备与 VisionGuard 的能力边界。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>对比维度</th>
+              <th>普通休息提醒工具</th>
+              <th>系统级屏幕健康功能</th>
+              <th>专业眼健康检测设备</th>
+              <th class="vg-column">VisionGuard</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>使用门槛</td><td>低，安装或打开即可使用</td><td>低，系统内置</td><td>高，需要专业设备或场地</td><td class="vg-column">中等，需授权摄像头</td></tr>
+            <tr><td>是否需要额外硬件</td><td>否</td><td>否</td><td>是</td><td class="vg-column">否，使用电脑摄像头</td></tr>
+            <tr><td>是否监测眨眼频率</td><td>否</td><td>否</td><td>部分支持</td><td class="vg-column">是</td></tr>
+            <tr><td>是否监测用眼距离</td><td>否</td><td>部分支持</td><td>是</td><td class="vg-column">是</td></tr>
+            <tr><td>是否监测环境亮度</td><td>否</td><td>部分支持</td><td>部分支持</td><td class="vg-column">是</td></tr>
+            <tr><td>是否区分 Session Time 和 Daily Load</td><td>否</td><td>部分支持</td><td>否</td><td class="vg-column">是</td></tr>
+            <tr><td>是否提供实时提醒</td><td>是</td><td>部分支持</td><td>否</td><td class="vg-column">是</td></tr>
+            <tr><td>是否提供趋势分析</td><td>部分支持</td><td>部分支持</td><td>是</td><td class="vg-column">是</td></tr>
+            <tr><td>是否提供 AI 报告</td><td>否</td><td>否</td><td>部分支持</td><td class="vg-column">是</td></tr>
+            <tr><td>适用场景</td><td>简单休息提醒</td><td>系统屏幕时间管理</td><td>专业检测与诊断辅助</td><td class="vg-column">学习、办公、内容创作、高强度屏幕使用</td></tr>
+            <tr><td>主要不足</td><td>数据维度单一，缺少行为监测</td><td>能力受系统限制，细粒度不足</td><td>使用成本高，不适合日常连续使用</td><td class="vg-column">摄像头估算精度受光线、角度和设备影响</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

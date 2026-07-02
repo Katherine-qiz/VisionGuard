@@ -1,5 +1,6 @@
 // src/api/client.ts
 import type { EyeMetrics } from "../types/metrics";
+import { normalizeMetrics } from "../utils/normalizeMetrics";
 
 const API_BASE_URL = "http://127.0.0.1:5000";
 
@@ -16,7 +17,8 @@ export async function fetchEyeMetrics(): Promise<EyeMetrics> {
         throw new Error(`Failed to fetch metrics: ${res.status} ${errorText}`);
     }
 
-    return res.json();
+    const data = await res.json();
+    return normalizeMetrics(data);
 }
 
 export async function resetAnalyzerSession(): Promise<void> {
@@ -48,7 +50,13 @@ export async function analyzeFrame(imageBase64: string): Promise<AnalyzeFrameRes
         throw new Error("Failed to analyze frame");
     }
 
-    return res.json();
+    const data = await res.json();
+    return {
+        ...data,
+        ...normalizeMetrics(data),
+        success: Boolean(data.success),
+        processedFrame: data.processedFrame ?? null,
+    };
 }
 
 export async function generateAIReport(payload: EyeMetrics) {

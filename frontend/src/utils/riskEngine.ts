@@ -193,7 +193,7 @@ function clampScore(score: number) {
 }
 
 function blinkFrequencyScore(metrics: EyeMetrics) {
-    const blinkRate = metrics.smoothedBlinkRate ?? metrics.blinkRate;
+    const blinkRate = metrics.blinkRate;
     if (blinkRate >= 15) return 100;
     if (blinkRate >= 12) return 90;
     if (blinkRate >= 8) return 75;

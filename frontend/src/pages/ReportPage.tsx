@@ -16,6 +16,7 @@ import {
     saveLatestReport,
     subscribeLocalData,
 } from "../utils/localData";
+import { normalizeMetrics } from "../utils/normalizeMetrics";
 
 type ReportPageProps = {
     onOpenSettings?: () => void;
@@ -45,6 +46,9 @@ type MetricsSnapshot = {
     sessionUseTimeSeconds: number | null;
     totalUseTimeSeconds: number | null;
     eyeHealthScore: number | null;
+    scoreLevel: MetricStatus;
+    isCalibrating: boolean;
+    faceDetected: boolean;
 };
 
 type AIReport = {
@@ -92,10 +96,18 @@ type ReportPayload = {
     sessionUseTimeSeconds: number | null;
     totalUseTimeSeconds: number | null;
     eyeHealthScore: number | null;
+    scoreLevel: MetricStatus;
+    isCalibrating: boolean;
+    faceDetected: boolean;
     selectedDate: string;
     metricsSnapshot: MetricsSnapshot;
     remindersSnapshot: ReminderEvent[];
     recentSamples: Array<Record<string, unknown>>;
+    todayReminderSummary: unknown;
+    currentReminders: unknown;
+    reminderCountByType: unknown;
+    recurringIssues: string[];
+    improvedSignals: string[];
     reminders: unknown;
     latestMetrics: unknown;
     dailyStats: unknown;
@@ -135,6 +147,15 @@ function secondsToMinutes(seconds: number | null) {
 
 function formatGeneratedAt(generatedAt: string) {
     return generatedAt ? new Date(generatedAt).toLocaleString() : "Not generated yet";
+}
+
+function reminderLabel(type: string) {
+    if (type === "blink") return "Blink rate";
+    if (type === "distance") return "Viewing distance";
+    if (type === "brightness") return "Brightness";
+    if (type === "use_time") return "Session time";
+    if (type === "face") return "Face visibility";
+    return type;
 }
 
 function scoreStatus(score: number): MetricStatus {
@@ -264,11 +285,78 @@ function topRiskFromMetrics(metrics: MetricExplanation[]) {
     return "Session time";
 }
 
+function buildTodayReminderSummary(events: ReminderEvent[], snapshot: MetricsSnapshot) {
+    const today = localDateKey();
+    const todayEvents = events.filter((event) => event.date === today);
+    const countByType = todayEvents.reduce<Record<string, number>>((counts, event) => {
+        counts[event.type] = (counts[event.type] ?? 0) + 1;
+        return counts;
+    }, {});
+    const latestByType = todayEvents.reduce<Record<string, ReminderEvent>>((latest, event) => {
+        const currentLatest = latest[event.type];
+        if (!currentLatest || event.triggeredAt > currentLatest.triggeredAt) {
+            latest[event.type] = event;
+        }
+        return latest;
+    }, {});
+    const currentMetricStatus = {
+        blink: metricStatus("blinkRate", snapshot.blinkRate),
+        distance: metricStatus("distance", snapshot.distanceCm),
+        brightness: metricStatus("brightness", snapshot.brightnessLux),
+        use_time: metricStatus("sessionTime", secondsToMinutes(snapshot.sessionUseTimeSeconds ?? snapshot.useTimeSeconds)),
+        face: snapshot.faceDetected ? "Good" : "Attention",
+    } satisfies Record<string, MetricStatus>;
+    const currentActiveTypes = Object.entries(currentMetricStatus)
+        .filter(([, status]) => status !== "Good")
+        .map(([type]) => type);
+    const recurringIssues = Object.entries(countByType)
+        .filter(([, count]) => count > 1)
+        .map(([type, count]) => `${reminderLabel(type)} appeared ${count} times today.`);
+    const improvedSignals = Object.entries(countByType)
+        .filter(([type]) => !currentActiveTypes.includes(type))
+        .map(([type]) => `${reminderLabel(type)} had reminders earlier today but is not active in the current snapshot.`);
+
+    return {
+        date: today,
+        totalReminderCount: todayEvents.length,
+        types: Object.keys(countByType),
+        countByType,
+        latestByType: Object.fromEntries(Object.entries(latestByType).map(([type, event]) => [
+            type,
+            {
+                title: event.title,
+                level: event.level,
+                triggeredAt: event.triggeredAt,
+                currentStillPresent: currentActiveTypes.includes(type),
+            },
+        ])),
+        currentActiveTypes,
+        recurringIssues,
+        improvedSignals,
+    };
+}
+
+function summarizeReminderSnapshot(events: ReminderEvent[], snapshot: MetricsSnapshot) {
+    const summary = buildTodayReminderSummary(events, snapshot);
+    if (summary.totalReminderCount === 0) {
+        return "No reminder history has been recorded today, so this report mainly reflects the current monitoring snapshot.";
+    }
+
+    const types = summary.types.map(reminderLabel).join(", ");
+    const improved = summary.improvedSignals.length > 0
+        ? ` ${summary.improvedSignals.join(" ")}`
+        : "";
+    const active = summary.currentActiveTypes.length > 0
+        ? ` Current attention signals: ${summary.currentActiveTypes.map(reminderLabel).join(", ")}.`
+        : " No urgent reminder is active in the current snapshot.";
+    return `Today VisionGuard recorded ${summary.totalReminderCount} reminder${summary.totalReminderCount === 1 ? "" : "s"} across ${types}.${active}${improved}`;
+}
+
 function buildFallbackReport(snapshot: MetricsSnapshot, reportScore: number): AIReport {
     const metrics = fallbackMetricExplanations(snapshot);
     const needsAttention = metrics
         .filter((metric) => metric.status !== "Good")
-        .map((metric) => `${topRiskFromMetrics([metric])}: ${metric.meaning}`);
+        .map((metric) => `${topRiskFromMetrics([metric])}: keep this signal in range during upcoming sessions rather than treating the current value as an isolated reading.`);
     const whatIsGood = metrics
         .filter((metric) => metric.status === "Good")
         .map((metric) => `${topRiskFromMetrics([metric]) === "No major risk" ? metric.metric : topRiskFromMetrics([metric])}: ${metric.meaning}`);
@@ -276,7 +364,9 @@ function buildFallbackReport(snapshot: MetricsSnapshot, reportScore: number): AI
     return {
         summary: `Your report score is ${reportScore}/100. VisionGuard is using your latest blink, distance, brightness, and session-time signals to summarize your screen-use habits.`,
         scoreMeaning: `A score of ${reportScore}/100 means your recent eye-care behavior is in the ${scoreStatus(reportScore).toLowerCase()} range. It is a behavioral guidance score, not a medical diagnosis.`,
-        mainIssue: needsAttention[0] ?? "No major issue stands out in this snapshot.",
+        mainIssue: needsAttention.length > 0
+            ? `${topRiskFromMetrics(metrics)} is the main pattern to watch in the current report context.`
+            : "No major recurring issue stands out in the available report context.",
         whatIsGood: whatIsGood.length > 0 ? whatIsGood : ["At least one signal is close to the recommended range."],
         needsAttention: needsAttention.length > 0 ? needsAttention : ["Keep monitoring to build a clearer pattern over time."],
         metricExplanations: metrics,
@@ -340,12 +430,16 @@ function normalizeReport(report: Partial<AIReport>, snapshot: MetricsSnapshot, r
             ...stringArray(report.fatigueAnalysis),
         ];
 
+    const mainIssue = report.mainIssue || needsAttention[0] || fallback.mainIssue;
+    const distinctNeedsAttention = (needsAttention.length > 0 ? needsAttention : fallback.needsAttention)
+        .filter((item) => item.trim() !== mainIssue.trim());
+
     return {
         summary: report.summary || fallback.summary,
         scoreMeaning: report.scoreMeaning || (report as { score_explanation?: string }).score_explanation || fallback.scoreMeaning,
-        mainIssue: report.mainIssue || needsAttention[0] || fallback.mainIssue,
+        mainIssue,
         whatIsGood: stringArray(report.whatIsGood).length > 0 ? stringArray(report.whatIsGood) : fallback.whatIsGood,
-        needsAttention: needsAttention.length > 0 ? needsAttention : fallback.needsAttention,
+        needsAttention: distinctNeedsAttention.length > 0 ? distinctNeedsAttention : fallback.needsAttention,
         metricExplanations: fallbackMetrics.map((fallbackMetric, index) => normalizeMetricExplanation(sourceMetrics[index], fallbackMetric)),
         actionPlan: normalizeActionPlan(report.actionPlan, recommendations.length > 0 ? {
             ...fallback.actionPlan,
@@ -370,15 +464,21 @@ function entryFromLegacyReport(value: unknown, generatedAt = ""): ReportHistoryE
     if (!value || typeof value !== "object") return null;
     const maybeEntry = value as Partial<ReportHistoryEntry> & Partial<AIReport>;
     if (maybeEntry.report && maybeEntry.metricsSnapshot && typeof maybeEntry.reportScore === "number") {
+        const metricsSnapshot = {
+            ...maybeEntry.metricsSnapshot,
+            scoreLevel: maybeEntry.metricsSnapshot.scoreLevel ?? scoreStatus(maybeEntry.reportScore),
+            isCalibrating: maybeEntry.metricsSnapshot.isCalibrating ?? false,
+            faceDetected: maybeEntry.metricsSnapshot.faceDetected ?? false,
+        };
         return {
             id: maybeEntry.id ?? `report-${maybeEntry.generatedAt ?? generatedAt}`,
             prompt: maybeEntry.prompt ?? REPORT_PROMPT_TEXT,
-            report: normalizeReport(maybeEntry.report, maybeEntry.metricsSnapshot, maybeEntry.reportScore),
+            report: normalizeReport(maybeEntry.report, metricsSnapshot, maybeEntry.reportScore),
             generatedAt: maybeEntry.generatedAt ?? generatedAt,
             reportScore: maybeEntry.reportScore,
             riskLevel: maybeEntry.riskLevel ?? scoreStatus(maybeEntry.reportScore),
             topRisk: maybeEntry.topRisk ?? topRiskFromMetrics(maybeEntry.report.metricExplanations ?? []),
-            metricsSnapshot: maybeEntry.metricsSnapshot,
+            metricsSnapshot,
             remindersSnapshot: Array.isArray(maybeEntry.remindersSnapshot) ? maybeEntry.remindersSnapshot : [],
         };
     }
@@ -392,6 +492,9 @@ function entryFromLegacyReport(value: unknown, generatedAt = ""): ReportHistoryE
         sessionUseTimeSeconds: null,
         totalUseTimeSeconds: null,
         eyeHealthScore: reportScore,
+        scoreLevel: scoreStatus(reportScore),
+        isCalibrating: false,
+        faceDetected: false,
     };
     const report = normalizeReport(maybeEntry, snapshot, reportScore);
     return {
@@ -461,6 +564,9 @@ function buildSnapshotFromPayload(payload: Omit<ReportPayload, "metricsSnapshot"
         sessionUseTimeSeconds: payload.sessionUseTimeSeconds,
         totalUseTimeSeconds: payload.totalUseTimeSeconds,
         eyeHealthScore: payload.eyeHealthScore,
+        scoreLevel: payload.scoreLevel,
+        isCalibrating: payload.isCalibrating,
+        faceDetected: payload.faceDetected,
     };
 }
 
@@ -476,41 +582,73 @@ async function buildReportPayload(liveMetrics?: EyeMetrics): Promise<ReportPaylo
         .filter((sample) => !sample.isCalibrating)
         .sort((a, b) => b.timestamp - a.timestamp);
     const latest = samples[0];
-    const remindersSnapshot = readReminderEvents()
+    const reminderEvents = readReminderEvents();
+    const remindersSnapshot = reminderEvents
         .sort((a, b) => b.triggeredAt - a.triggeredAt)
         .slice(0, 8);
     const dailyStats = readDailySummaries();
     const latestMetrics = readLatestMetrics();
+    const normalizedLiveMetrics = liveMetrics ? normalizeMetrics(liveMetrics) : null;
+    const normalizedCurrentMetrics = normalizeMetrics(currentMetrics);
     const previousReport = readLatestReport();
-    const latestScore = numberOrNull(liveMetrics?.eyeHealthScore)
+    const latestScore = numberOrNull(normalizedLiveMetrics?.eyeHealthScore)
         ?? numberOrNull(latestMetrics?.eyeHealthScore)
         ?? latest?.eyeHealthScore
-        ?? numberOrNull(currentMetrics.eyeHealthScore)
+        ?? numberOrNull(normalizedCurrentMetrics.eyeHealthScore)
         ?? null;
-    const distanceCm = numberOrNull(liveMetrics?.distanceCm)
+    const distanceCm = numberOrNull(normalizedLiveMetrics?.distanceCm)
         ?? numberOrNull(latestMetrics?.distanceCm)
         ?? latest?.distanceCm
-        ?? numberOrNull(currentMetrics.distanceCm)
+        ?? numberOrNull(normalizedCurrentMetrics.distanceCm)
         ?? null;
-    const brightnessLux = numberOrNull(liveMetrics?.brightnessLux)
+    const brightnessLux = numberOrNull(normalizedLiveMetrics?.brightnessLux)
         ?? numberOrNull(latestMetrics?.brightnessLux)
         ?? latest?.brightnessLux
-        ?? numberOrNull(currentMetrics.brightnessLux)
+        ?? numberOrNull(normalizedCurrentMetrics.brightnessLux)
         ?? null;
+    const scoreLevel = (normalizedLiveMetrics?.scoreLevel ?? latestMetrics?.scoreLevel ?? latest?.scoreLevel ?? normalizedCurrentMetrics.scoreLevel) as MetricStatus;
 
-    const payloadWithoutSnapshot = {
-        blinkRate: numberOrNull(liveMetrics?.blinkRate) ?? numberOrNull(latestMetrics?.blinkRate) ?? latest?.blinkRate ?? numberOrNull(currentMetrics.blinkRate) ?? null,
+    const snapshotBase = {
+        blinkRate: numberOrNull(normalizedLiveMetrics?.blinkRate) ?? numberOrNull(latestMetrics?.blinkRate) ?? latest?.blinkRate ?? numberOrNull(normalizedCurrentMetrics.blinkRate) ?? null,
         viewingDistance: distanceCm,
         distanceCm,
         brightness: brightnessLux,
         brightnessLux,
-        useTimeSeconds: numberOrNull(liveMetrics?.useTimeSeconds) ?? numberOrNull(latestMetrics?.useTimeSeconds) ?? latest?.useTimeSeconds ?? numberOrNull(currentMetrics.useTimeSeconds) ?? null,
-        sessionUseTimeSeconds: numberOrNull(liveMetrics?.sessionUseTimeSeconds) ?? numberOrNull(latestMetrics?.sessionUseTimeSeconds) ?? latest?.sessionUseTimeSeconds ?? numberOrNull(currentMetrics.sessionUseTimeSeconds) ?? null,
-        totalUseTimeSeconds: numberOrNull(liveMetrics?.totalUseTimeSeconds) ?? numberOrNull(latestMetrics?.totalUseTimeSeconds) ?? latest?.totalUseTimeSeconds ?? numberOrNull(currentMetrics.totalUseTimeSeconds) ?? null,
+        useTimeSeconds: numberOrNull(normalizedLiveMetrics?.useTimeSeconds) ?? numberOrNull(latestMetrics?.useTimeSeconds) ?? latest?.useTimeSeconds ?? numberOrNull(normalizedCurrentMetrics.useTimeSeconds) ?? null,
+        sessionUseTimeSeconds: numberOrNull(normalizedLiveMetrics?.sessionUseTimeSeconds) ?? numberOrNull(latestMetrics?.sessionUseTimeSeconds) ?? latest?.sessionUseTimeSeconds ?? numberOrNull(normalizedCurrentMetrics.sessionUseTimeSeconds) ?? null,
+        totalUseTimeSeconds: numberOrNull(normalizedLiveMetrics?.totalUseTimeSeconds) ?? numberOrNull(latestMetrics?.totalUseTimeSeconds) ?? latest?.totalUseTimeSeconds ?? numberOrNull(normalizedCurrentMetrics.totalUseTimeSeconds) ?? null,
         eyeHealthScore: latestScore,
+        scoreLevel,
+        isCalibrating: normalizedLiveMetrics?.isCalibrating ?? latestMetrics?.isCalibrating ?? latest?.isCalibrating ?? normalizedCurrentMetrics.isCalibrating ?? false,
+        faceDetected: normalizedLiveMetrics?.faceDetected ?? latestMetrics?.faceDetected ?? latest?.faceDetected ?? normalizedCurrentMetrics.faceDetected ?? false,
+    };
+    const snapshot = buildSnapshotFromPayload({
+        ...snapshotBase,
+        selectedDate: localDateKey(),
+        remindersSnapshot,
+        recentSamples: [],
+        reminders: remindersSnapshot,
+        latestMetrics,
+        dailyStats,
+        previousReport: null,
+        todayReminderSummary: null,
+        currentReminders: [],
+        reminderCountByType: {},
+        recurringIssues: [],
+        improvedSignals: [],
+    });
+    const todayReminderSummary = buildTodayReminderSummary(reminderEvents, snapshot);
+
+    const payloadWithoutSnapshot = {
+        ...snapshotBase,
         selectedDate: localDateKey(),
         remindersSnapshot,
         recentSamples: samples.slice(0, 8),
+        todayReminderSummary,
+        currentReminders: remindersSnapshot.filter((reminder) => todayReminderSummary.currentActiveTypes.includes(reminder.type)).slice(0, 5),
+        reminderCountByType: todayReminderSummary.countByType,
+        recurringIssues: todayReminderSummary.recurringIssues,
+        improvedSignals: todayReminderSummary.improvedSignals,
         reminders: remindersSnapshot,
         latestMetrics,
         dailyStats,
@@ -593,6 +731,7 @@ function ReportArticle({
 }) {
     const reportStatus = scoreStatus(entry.reportScore);
     const scoreChanged = currentScore !== null && Math.abs(currentScore - entry.reportScore) > 5;
+    const behaviorReview = entry.report.trendInsight || summarizeReminderSnapshot(entry.remindersSnapshot, entry.metricsSnapshot);
 
     return (
         <>
@@ -600,7 +739,7 @@ function ReportArticle({
         <article className="report-article">
             <div className="report-overview">
                 <div>
-                    <p className="eyebrow">Report Score</p>
+                    <p className="eyebrow">Report Snapshot</p>
                     <h2>{entry.reportScore} / 100</h2>
                     <p className="panel-helper">
                         This score was fixed when the report was generated.
@@ -620,7 +759,7 @@ function ReportArticle({
             )}
 
             <section className="report-section report-summary">
-                <h3>Summary</h3>
+                <h3>Executive Summary</h3>
                 <p>{entry.report.summary}</p>
             </section>
 
@@ -629,16 +768,29 @@ function ReportArticle({
                 <p>{entry.report.scoreMeaning}</p>
             </section>
 
-            <div className="report-insight-grid">
-                <ReportList title="Main issue" items={[entry.report.mainIssue]} />
-                <ReportList title="What you are doing well" items={entry.report.whatIsGood} />
-                <ReportList title="What needs attention" items={entry.report.needsAttention} />
-            </div>
+            <section className="report-section">
+                <h3>Today’s Behavior Review</h3>
+                <p>{behaviorReview}</p>
+                {entry.report.whatIsGood.length > 0 && (
+                    <ul>
+                        {entry.report.whatIsGood.map((item) => (
+                            <li key={item}>{item}</li>
+                        ))}
+                    </ul>
+                )}
+            </section>
 
             <section className="report-section">
-                <h3>Key Metrics</h3>
+                <h3>Key Signals</h3>
                 <KeyMetricsTable metrics={entry.report.metricExplanations} />
             </section>
+
+            <section className="report-section">
+                <h3>Main Pattern</h3>
+                <p>{entry.report.mainIssue}</p>
+            </section>
+
+            <ReportList title="What Needs Attention" items={entry.report.needsAttention} />
 
             <section className="report-section">
                 <h3>Action Plan</h3>

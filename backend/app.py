@@ -420,6 +420,31 @@ def build_report_context(metrics, request_data):
     request_samples = request_data.get("recentSamples")
     recent_samples = request_samples if isinstance(request_samples, list) else []
     combined_samples = [*recent_samples, *list(report_metrics_history)]
+    reminder_events = request_data.get("remindersSnapshot")
+    if not isinstance(reminder_events, list):
+        reminder_events = request_data.get("reminders")
+    if not isinstance(reminder_events, list):
+        reminder_events = []
+    reminder_count_by_type = {}
+    latest_by_type = {}
+    for event in reminder_events:
+        if not isinstance(event, dict):
+            continue
+        reminder_type = event.get("type", "unknown")
+        reminder_count_by_type[reminder_type] = reminder_count_by_type.get(reminder_type, 0) + 1
+        previous = latest_by_type.get(reminder_type)
+        if not previous or event.get("triggeredAt", 0) > previous.get("triggeredAt", 0):
+            latest_by_type[reminder_type] = event
+    today_reminder_summary = request_data.get("todayReminderSummary")
+    if not isinstance(today_reminder_summary, dict):
+        today_reminder_summary = {
+            "totalReminderCount": len(reminder_events),
+            "countByType": reminder_count_by_type,
+            "latestByType": latest_by_type,
+            "currentActiveTypes": [],
+            "recurringIssues": request_data.get("recurringIssues", []),
+            "improvedSignals": request_data.get("improvedSignals", []),
+        }
 
     return {
         "currentMetrics": metrics,
@@ -428,6 +453,11 @@ def build_report_context(metrics, request_data):
             "previousReport is historical context only and must not be described as the current score."
         ),
         "previousReport": request_data.get("previousReport"),
+        "todayReminderSummary": today_reminder_summary,
+        "currentReminders": request_data.get("currentReminders", []),
+        "reminderCountByType": today_reminder_summary.get("countByType", reminder_count_by_type),
+        "recurringIssues": request_data.get("recurringIssues", today_reminder_summary.get("recurringIssues", [])),
+        "improvedSignals": request_data.get("improvedSignals", today_reminder_summary.get("improvedSignals", [])),
         "historicalSummary": {
             "sampleCount": len(combined_samples),
             "averageBlinkRate": average_metric(combined_samples, "blinkRate"),
@@ -464,6 +494,14 @@ def call_deepseek_report(report_context):
         "- Session Time: Good <=20min; Attention 20-40min; Warning >40min\n\n"
         "Report quality rules:\n"
         "- This is behavioral guidance, not medical diagnosis.\n"
+        "- currentMetrics is the current snapshot only.\n"
+        "- todayReminderSummary, reminderCountByType, currentReminders, recurringIssues, improvedSignals, and recentSamples describe today's behavior history.\n"
+        "- Do not base the full report only on currentMetrics; combine the current snapshot with today's reminder history.\n"
+        "- If current metrics are Good but todayReminderSummary has reminders, explain that the current state improved while the reminder history still reveals a pattern to watch.\n"
+        "- mainIssue must describe the dominant recurring behavior or main pattern today, not merely repeat the lowest current metric.\n"
+        "- needsAttention must be practical next focus areas or cautions, not a copy of mainIssue.\n"
+        "- If there is no urgent warning right now, say so and do not exaggerate Attention-level signals into severe risk.\n"
+        "- Avoid repeating the same sentence across summary, mainIssue, and needsAttention.\n"
         "- Explain what the score means in friendly language.\n"
         "- Mention both healthy signals and signals that need attention.\n"
         "- Use concrete values from currentMetrics when available.\n"
@@ -495,6 +533,7 @@ def call_deepseek_report(report_context):
         '  "disclaimer": string,\n'
         '  "riskLevel": "Good | Attention | Warning | High Risk",\n'
         '  "score": number,\n'
+        '  "trendInsight": string,\n'
         '  "keyFindings": string[],\n'
         '  "riskFactors": string[],\n'
         '  "recommendations": string[]\n'
@@ -579,6 +618,10 @@ class EyeFatigueMonitor:
         self.completed_break = False
         self.no_face_since = None
         self.use_time_status = "normal"
+        self.has_calibrated = False
+        self.calibration_start_time = None
+        self.calibration_seconds = 12
+        self.calibration_day_key = local_day_key()
         self.frame_count = 0
         self.fps = 0
         self.last_fps_time = time.time()
@@ -650,28 +693,30 @@ class EyeFatigueMonitor:
         self.ear_samples.append(ear)
         if len(self.ear_samples) >= 50:
             sorted_samples = sorted(self.ear_samples)
-            self.ear_baseline = sorted_samples[int(len(sorted_samples) * 0.75)]
+            self.ear_baseline = sorted_samples[int(len(sorted_samples) * 0.7)]
 
-        close_threshold = self.ear_baseline * 0.88
-        open_threshold = self.ear_baseline * 0.95
-        self.last_blink_threshold = close_threshold
+        blink_threshold = self.ear_baseline * 0.75
+        self.last_blink_threshold = blink_threshold
 
-        if len(self.eye_state_history) < 3:
+        if len(self.eye_state_history) < 5:
             return False
 
-        current_ear = self.eye_state_history[-1][0]
+        recent_ears = [e[0] for e in list(self.eye_state_history)[-5:]]
+        current_ear = recent_ears[-1]
+        prev_ear = recent_ears[-2]
 
-        if current_ear < close_threshold and not self.is_blinking:
-            self.is_blinking = True
-            self.blink_start_time = time.time()
+        if current_ear < blink_threshold and not self.is_blinking:
+            if prev_ear >= blink_threshold:
+                self.is_blinking = True
+                self.blink_start_time = time.time()
             return False
 
-        if current_ear > open_threshold and self.is_blinking:
+        if self.is_blinking and current_ear >= blink_threshold:
             self.is_blinking = False
             if self.blink_start_time:
                 blink_duration = time.time() - self.blink_start_time
                 self.blink_start_time = None
-                return 0.03 <= blink_duration <= 1.0
+                return 0.05 < blink_duration < 0.5
             return False
 
         if self.is_blinking and self.blink_start_time:
@@ -683,25 +728,25 @@ class EyeFatigueMonitor:
 
     def update_blink_frequency(self):
         current_time = time.time()
-        recent_five_minutes = [t for t in self.blink_timestamps if t > current_time - 300]
-        self.blink_timestamps = deque(recent_five_minutes, maxlen=300)
+        recent_blinks = [t for t in self.blink_timestamps if t > current_time - 60]
+        self.blink_timestamps = deque(recent_blinks, maxlen=300)
 
-        if self.monitoring_start_time is None:
-            self.blink_frequency = 0
-            self.raw_blink_frequency = 0
-            self.last_blink_events_in_window = 0
+        self.last_blink_events_in_window = len(recent_blinks)
+        if recent_blinks:
+            self.last_blink_window_seconds = round(min(60, current_time - recent_blinks[0]), 1)
+        else:
             self.last_blink_window_seconds = 0
-            return self.blink_frequency
 
-        elapsed = max(1.0, current_time - self.monitoring_start_time)
-        window_seconds = min(60, elapsed)
-        window_start = current_time - window_seconds
-        blinks_in_window = [t for t in self.blink_timestamps if t >= window_start]
+        if len(recent_blinks) >= 2:
+            time_span = max(0.001, recent_blinks[-1] - recent_blinks[0])
+            frequency_per_second = (len(recent_blinks) - 1) / time_span
+            blink_rate_per_minute = frequency_per_second * 60
+            self.raw_blink_frequency = round(blink_rate_per_minute)
+            self.blink_frequency = self.raw_blink_frequency
+        else:
+            self.raw_blink_frequency = 0
+            self.blink_frequency = 0
 
-        self.last_blink_events_in_window = len(blinks_in_window)
-        self.last_blink_window_seconds = round(window_seconds, 1)
-        self.raw_blink_frequency = round(len(blinks_in_window) / window_seconds * 60)
-        self.blink_frequency = self.raw_blink_frequency
         return self.blink_frequency
 
     def update_smoothed_blink_rate(self, raw_blink_rate, face_detected):
@@ -882,16 +927,34 @@ class EyeFatigueMonitor:
         if self.active_day_key != current_day:
             self.active_day_key = current_day
             self.total_use_time_seconds = 0.0
+            self.session_start_time = None
+            self.last_frame_time = None
+            self.session_active_time_seconds = 0.0
+            self.active_screen_time_seconds = 0.0
+            self.continuous_use_time_seconds = 0.0
+            self.break_duration_seconds = 0.0
+            self.completed_break = False
+            self.no_face_since = None
+            self.use_time_status = "normal"
             self.daily_session_durations = []
+            self.has_calibrated = False
+            self.calibration_start_time = None
+            self.calibration_day_key = current_day
+            self.ear_samples.clear()
+            self.ear_baseline = 0.25
+            self.blink_count = 0
+            self.blink_frequency = 0
+            self.raw_blink_frequency = 0
+            self.blink_timestamps.clear()
+            self.smoothed_blink_rate = 0.0
+            self.last_blink_events_in_window = 0
+            self.last_blink_window_seconds = 0
+            self.is_blinking = False
+            self.blink_start_time = None
 
     def update_use_time(self, face_detected, is_calibrating):
         current_time = time.time()
         self.ensure_active_day()
-
-        if is_calibrating:
-            self.last_frame_time = current_time
-            self.use_time_status = "normal"
-            return
 
         if self.last_frame_time is None:
             self.last_frame_time = current_time
@@ -940,13 +1003,37 @@ class EyeFatigueMonitor:
         self.ensure_active_day()
         if self.session_active_time_seconds > 0:
             self.daily_session_durations.append(self.session_active_time_seconds)
-        preserved_day_key = self.active_day_key
-        preserved_total = self.total_use_time_seconds
-        preserved_durations = [*self.daily_session_durations]
-        self.__init__()
-        self.active_day_key = preserved_day_key
-        self.total_use_time_seconds = preserved_total
-        self.daily_session_durations = preserved_durations
+
+        self.session_start_time = None
+        self.last_frame_time = None
+        self.session_active_time_seconds = 0.0
+        self.active_screen_time_seconds = 0.0
+        self.continuous_use_time_seconds = 0.0
+        self.break_duration_seconds = 0.0
+        self.completed_break = False
+        self.no_face_since = None
+        self.use_time_status = "normal"
+
+        self.is_blinking = False
+        self.blink_start_time = None
+
+    def get_calibration_state(self, face_detected):
+        if self.has_calibrated:
+            return False
+
+        if not face_detected:
+            return True
+
+        if self.calibration_start_time is None:
+            self.calibration_start_time = time.time()
+            self.calibration_day_key = local_day_key()
+
+        is_calibrating = (time.time() - self.calibration_start_time) < self.calibration_seconds
+        if not is_calibrating:
+            self.has_calibrated = True
+            return False
+
+        return True
 
     def encode_processed_frame(self, frame):
         success, buffer = cv2.imencode(
@@ -1013,11 +1100,12 @@ class EyeFatigueMonitor:
             annotated_frame = self.draw_eye_contours(annotated_frame, landmarks)
 
         raw_blink_rate = int(round(self.update_blink_frequency()))
-        is_calibrating = face_detected and self.last_blink_window_seconds < 30
+        is_calibrating = self.get_calibration_state(face_detected)
         self.update_use_time(face_detected, is_calibrating)
         self.update_fps()
 
-        blink_rate = self.update_smoothed_blink_rate(raw_blink_rate, face_detected)
+        self.update_smoothed_blink_rate(raw_blink_rate, face_detected)
+        blink_rate = int(round(self.blink_frequency))
         distance_cm = round(distance, 1) if face_detected else 0
         brightness_lux = int(round(brightness))
         session_use_time_seconds = self.get_session_use_time_seconds()
@@ -1223,7 +1311,12 @@ def generate_ai_report():
         "distanceCm": data.get("distanceCm"),
         "brightnessLux": data.get("brightnessLux"),
         "useTimeSeconds": data.get("useTimeSeconds"),
+        "sessionUseTimeSeconds": data.get("sessionUseTimeSeconds"),
+        "totalUseTimeSeconds": data.get("totalUseTimeSeconds"),
         "eyeHealthScore": data.get("eyeHealthScore"),
+        "scoreLevel": data.get("scoreLevel"),
+        "isCalibrating": data.get("isCalibrating"),
+        "faceDetected": data.get("faceDetected"),
     }
     report_input = {
         **data,
@@ -1308,7 +1401,12 @@ def generate_report():
         "distanceCm": data.get("distanceCm"),
         "brightnessLux": data.get("brightnessLux"),
         "useTimeSeconds": data.get("useTimeSeconds"),
+        "sessionUseTimeSeconds": data.get("sessionUseTimeSeconds"),
+        "totalUseTimeSeconds": data.get("totalUseTimeSeconds"),
         "eyeHealthScore": data.get("eyeHealthScore"),
+        "scoreLevel": data.get("scoreLevel"),
+        "isCalibrating": data.get("isCalibrating"),
+        "faceDetected": data.get("faceDetected"),
     }
     report_context = build_report_context(metrics, data)
 

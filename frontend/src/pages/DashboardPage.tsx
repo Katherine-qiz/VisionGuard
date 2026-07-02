@@ -38,8 +38,8 @@ function DashboardPage({ onOpenSettings }: DashboardPageProps) {
     const metricStatus = (type: "blink" | "distance" | "brightness" | "use_time") =>
         isCalibrating ? "Calibrating" : statusLabel(riskByType(type)?.level);
     const metricHelper = (fallback: string) => isCalibrating ? "Collecting baseline data" : fallback;
-    const sessionUseTimeSeconds = metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds;
-    const todayTotalUseTimeSeconds = metrics.totalUseTimeSeconds ?? metrics.activeScreenTimeSeconds ?? 0;
+    const sessionUseTimeSeconds = metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds ?? 0;
+    const todayTotalUseTimeSeconds = metrics.totalUseTimeSeconds ?? 0;
     const todayTotalStatus = isMonitoring ? "Tracking" : "Recorded";
 
     return (

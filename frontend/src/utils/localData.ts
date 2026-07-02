@@ -2,6 +2,7 @@ import { localDateKey } from "./dateUtils";
 import type { EyeMetrics, ScoreLevel } from "../types/metrics";
 import type { Reminder, ReminderEvent } from "../types/reminder";
 import type { RiskItem } from "./riskEngine";
+import { normalizeMetrics } from "./normalizeMetrics";
 
 export const STORAGE_KEYS = {
     metricSamples: "visionguard_metric_samples",
@@ -171,17 +172,52 @@ export function saveSettings(partialSettings: Partial<VisionGuardSettings>) {
     return nextSettings;
 }
 
+function normalizeMetricSample(sample: Partial<MetricSample> & Record<string, unknown>): MetricSample {
+    const metrics = normalizeMetrics(sample);
+    const timestamp = typeof sample.timestamp === "number" ? sample.timestamp : Date.now();
+    return {
+        id: typeof sample.id === "string" ? sample.id : `metric-${timestamp}`,
+        userId: typeof sample.userId === "string" ? sample.userId : readUserProfile().userId,
+        timestamp,
+        date: typeof sample.date === "string" ? sample.date : localDateKey(timestamp),
+        blinkRate: metrics.blinkRate,
+        rawBlinkRate: metrics.rawBlinkRate,
+        smoothedBlinkRate: metrics.smoothedBlinkRate,
+        blinkCount: metrics.blinkCount,
+        blinkEventsInWindow: metrics.blinkEventsInWindow,
+        blinkWindowSeconds: metrics.blinkWindowSeconds,
+        distanceCm: metrics.distanceCm,
+        brightnessLux: metrics.brightnessLux,
+        useTimeSeconds: metrics.useTimeSeconds,
+        sessionUseTimeSeconds: metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
+        totalUseTimeSeconds: metrics.totalUseTimeSeconds ?? 0,
+        avgSessionUseTimeSeconds: metrics.avgSessionUseTimeSeconds ?? metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
+        activeScreenTimeSeconds: metrics.activeScreenTimeSeconds ?? metrics.useTimeSeconds,
+        continuousUseTimeSeconds: metrics.continuousUseTimeSeconds ?? metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
+        breakDurationSeconds: metrics.breakDurationSeconds ?? 0,
+        isCalibrating: metrics.isCalibrating,
+        useTimeStatus: metrics.useTimeStatus,
+        eyeHealthScore: metrics.eyeHealthScore,
+        scoreLevel: metrics.scoreLevel,
+        faceDetected: metrics.faceDetected,
+        risks: Array.isArray(sample.risks) ? sample.risks as RiskItem[] : [],
+        reminders: Array.isArray(sample.reminders) ? sample.reminders as Reminder[] : [],
+    };
+}
+
 export function readMetricSamples(): MetricSample[] {
-    return readJsonValue<MetricSample[]>(STORAGE_KEYS.metricSamples, []);
+    return readJsonValue<Array<Partial<MetricSample> & Record<string, unknown>>>(STORAGE_KEYS.metricSamples, [])
+        .map(normalizeMetricSample);
 }
 
 export function saveLatestMetrics(metrics: EyeMetrics) {
-    writeJsonValue(STORAGE_KEYS.latestMetrics, metrics);
+    writeJsonValue(STORAGE_KEYS.latestMetrics, normalizeMetrics(metrics));
     emitLocalDataUpdate();
 }
 
-export function readLatestMetrics(): Partial<EyeMetrics> | null {
-    return readJsonValue<Partial<EyeMetrics> | null>(STORAGE_KEYS.latestMetrics, null);
+export function readLatestMetrics(): EyeMetrics | null {
+    const metrics = readJsonValue<(Partial<EyeMetrics> & Record<string, unknown>) | null>(STORAGE_KEYS.latestMetrics, null);
+    return metrics ? normalizeMetrics(metrics) : null;
 }
 
 function writeMetricSamples(samples: MetricSample[]) {
@@ -215,7 +251,7 @@ function rebuildDailySummary(date: string) {
         averageBrightnessLux: average(daySamples.map((sample) => sample.brightnessLux)),
         averageEyeHealthScore: average(daySamples.map((sample) => sample.eyeHealthScore)),
         totalUseTimeSeconds: daySamples.length > 0
-            ? Math.max(...daySamples.map((sample) => sample.totalUseTimeSeconds ?? sample.activeScreenTimeSeconds ?? 0))
+            ? Math.max(...daySamples.map((sample) => sample.totalUseTimeSeconds ?? 0))
             : 0,
         latestSampleAt: daySamples.length > 0 ? Math.max(...daySamples.map((sample) => sample.timestamp)) : null,
         reminderCount: dayReminders.length,
@@ -232,70 +268,72 @@ export function createMetricSample(
     reminders: Reminder[],
     timestamp = Date.now(),
 ): MetricSample {
+    const normalizedMetrics = normalizeMetrics(metrics);
     return {
         id: `metric-${timestamp}`,
         userId,
         timestamp,
         date: localDateKey(timestamp),
-        blinkRate: metrics.blinkRate,
-        rawBlinkRate: metrics.rawBlinkRate,
-        smoothedBlinkRate: metrics.smoothedBlinkRate,
-        blinkCount: metrics.blinkCount,
-        blinkEventsInWindow: metrics.blinkEventsInWindow,
-        blinkWindowSeconds: metrics.blinkWindowSeconds,
-        distanceCm: metrics.distanceCm,
-        brightnessLux: metrics.brightnessLux,
-        useTimeSeconds: metrics.useTimeSeconds,
-        sessionUseTimeSeconds: metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
-        totalUseTimeSeconds: metrics.totalUseTimeSeconds ?? metrics.activeScreenTimeSeconds ?? 0,
-        avgSessionUseTimeSeconds: metrics.avgSessionUseTimeSeconds ?? metrics.sessionUseTimeSeconds ?? metrics.useTimeSeconds,
-        activeScreenTimeSeconds: metrics.activeScreenTimeSeconds ?? metrics.useTimeSeconds,
-        continuousUseTimeSeconds: metrics.continuousUseTimeSeconds ?? metrics.useTimeSeconds,
-        breakDurationSeconds: metrics.breakDurationSeconds ?? 0,
-        isCalibrating: metrics.isCalibrating,
-        useTimeStatus: metrics.useTimeStatus,
-        eyeHealthScore: metrics.eyeHealthScore,
-        scoreLevel: metrics.scoreLevel,
-        faceDetected: metrics.faceDetected,
+        blinkRate: normalizedMetrics.blinkRate,
+        rawBlinkRate: normalizedMetrics.rawBlinkRate,
+        smoothedBlinkRate: normalizedMetrics.smoothedBlinkRate,
+        blinkCount: normalizedMetrics.blinkCount,
+        blinkEventsInWindow: normalizedMetrics.blinkEventsInWindow,
+        blinkWindowSeconds: normalizedMetrics.blinkWindowSeconds,
+        distanceCm: normalizedMetrics.distanceCm,
+        brightnessLux: normalizedMetrics.brightnessLux,
+        useTimeSeconds: normalizedMetrics.useTimeSeconds,
+        sessionUseTimeSeconds: normalizedMetrics.sessionUseTimeSeconds ?? normalizedMetrics.useTimeSeconds,
+        totalUseTimeSeconds: normalizedMetrics.totalUseTimeSeconds ?? 0,
+        avgSessionUseTimeSeconds: normalizedMetrics.avgSessionUseTimeSeconds ?? normalizedMetrics.sessionUseTimeSeconds ?? normalizedMetrics.useTimeSeconds,
+        activeScreenTimeSeconds: normalizedMetrics.activeScreenTimeSeconds ?? normalizedMetrics.useTimeSeconds,
+        continuousUseTimeSeconds: normalizedMetrics.continuousUseTimeSeconds ?? normalizedMetrics.useTimeSeconds,
+        breakDurationSeconds: normalizedMetrics.breakDurationSeconds ?? 0,
+        isCalibrating: normalizedMetrics.isCalibrating,
+        useTimeStatus: normalizedMetrics.useTimeStatus,
+        eyeHealthScore: normalizedMetrics.eyeHealthScore,
+        scoreLevel: normalizedMetrics.scoreLevel,
+        faceDetected: normalizedMetrics.faceDetected,
         risks,
         reminders,
     };
 }
 
 export function appendMetricSample(sample: MetricSample) {
+    const normalizedSample = normalizeMetricSample(sample);
     const samples = readMetricSamples();
-    writeMetricSamples([sample, ...samples]);
+    writeMetricSamples([normalizedSample, ...samples]);
     saveLatestMetrics({
-        blinkRate: sample.blinkRate,
-        rawBlinkRate: sample.rawBlinkRate,
-        smoothedBlinkRate: sample.smoothedBlinkRate,
-        blinkCount: sample.blinkCount,
-        blinkEventsInWindow: sample.blinkEventsInWindow,
-        blinkWindowSeconds: sample.blinkWindowSeconds,
-        distanceCm: sample.distanceCm,
-        brightnessLux: sample.brightnessLux,
-        useTimeSeconds: sample.useTimeSeconds,
-        sessionUseTimeSeconds: sample.sessionUseTimeSeconds,
-        totalUseTimeSeconds: sample.totalUseTimeSeconds,
-        avgSessionUseTimeSeconds: sample.avgSessionUseTimeSeconds,
-        activeScreenTimeSeconds: sample.activeScreenTimeSeconds,
-        continuousUseTimeSeconds: sample.continuousUseTimeSeconds,
-        breakDurationSeconds: sample.breakDurationSeconds,
-        isCalibrating: sample.isCalibrating,
-        eyeHealthScore: sample.eyeHealthScore,
-        scoreLevel: sample.scoreLevel,
-        useTimeStatus: sample.useTimeStatus,
+        blinkRate: normalizedSample.blinkRate,
+        rawBlinkRate: normalizedSample.rawBlinkRate,
+        smoothedBlinkRate: normalizedSample.smoothedBlinkRate,
+        blinkCount: normalizedSample.blinkCount,
+        blinkEventsInWindow: normalizedSample.blinkEventsInWindow,
+        blinkWindowSeconds: normalizedSample.blinkWindowSeconds,
+        distanceCm: normalizedSample.distanceCm,
+        brightnessLux: normalizedSample.brightnessLux,
+        useTimeSeconds: normalizedSample.useTimeSeconds,
+        sessionUseTimeSeconds: normalizedSample.sessionUseTimeSeconds,
+        totalUseTimeSeconds: normalizedSample.totalUseTimeSeconds,
+        avgSessionUseTimeSeconds: normalizedSample.avgSessionUseTimeSeconds,
+        activeScreenTimeSeconds: normalizedSample.activeScreenTimeSeconds,
+        continuousUseTimeSeconds: normalizedSample.continuousUseTimeSeconds,
+        breakDurationSeconds: normalizedSample.breakDurationSeconds,
+        isCalibrating: normalizedSample.isCalibrating,
+        eyeHealthScore: normalizedSample.eyeHealthScore,
+        scoreLevel: normalizedSample.scoreLevel,
+        useTimeStatus: normalizedSample.useTimeStatus,
         fps: 0,
         ear: 0,
         earBaseline: 0,
         blinkThreshold: 0,
         isBlinking: false,
-        faceDetected: sample.faceDetected,
+        faceDetected: normalizedSample.faceDetected,
         alerts: [],
     });
-    rebuildDailySummary(sample.date);
+    rebuildDailySummary(normalizedSample.date);
     emitLocalDataUpdate();
-    return sample;
+    return normalizedSample;
 }
 
 export function samplesForDate(date: string) {

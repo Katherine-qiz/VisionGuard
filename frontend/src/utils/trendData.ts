@@ -67,7 +67,7 @@ function reminderDate(event: ReminderEvent) {
 }
 
 function sampleUseTimeSeconds(sample: MetricSample) {
-    return sample.totalUseTimeSeconds ?? sample.activeScreenTimeSeconds ?? 0;
+    return sample.totalUseTimeSeconds ?? 0;
 }
 
 function average(values: number[]) {

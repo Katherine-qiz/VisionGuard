@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionGuard 产品整体架构图</title>
+  <style>
+    :root {
+      --page-bg: #f6f8fb;
+      --text-main: #1f2937;
+      --text-muted: #64748b;
+      --line: #d8e0ea;
+      --card: #ffffff;
+      --shadow: 0 18px 48px rgba(31, 41, 55, 0.08);
+      --blue: #eaf3ff;
+      --blue-line: #9fc3ef;
+      --yellow: #fff7df;
+      --yellow-line: #ead08a;
+      --purple: #f2ecff;
+      --purple-line: #c8b6ea;
+      --orange: #fff0e4;
+      --orange-line: #efbd91;
+      --gray: #edf2f7;
+      --gray-line: #b8c4d2;
+      --green: #eaf8f0;
+      --green-line: #a7d8bc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page-bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      width: min(1200px, calc(100vw - 48px));
+      margin: 32px auto;
+    }
+
+    .header {
+      margin-bottom: 18px;
+      text-align: center;
+    }
+
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .architecture {
+      padding: 18px;
+      border: 1px solid #e5ebf3;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: var(--shadow);
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 128px 1fr;
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 2px solid var(--layer-line);
+      border-radius: 22px;
+      background: var(--layer-bg);
+    }
+
+    .layer:last-child {
+      margin-bottom: 0;
+    }
+
+    .layer-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 74px;
+      border: 1px solid rgba(100, 116, 139, 0.18);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+      color: #334155;
+      font-size: 20px;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .layer-content {
+      min-width: 0;
+    }
+
+    .layer-note {
+      margin: 0 0 12px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .app-layer {
+      --layer-bg: var(--blue);
+      --layer-line: var(--blue-line);
+    }
+
+    .business-layer {
+      --layer-bg: var(--yellow);
+      --layer-line: var(--yellow-line);
+    }
+
+    .service-layer {
+      --layer-bg: var(--purple);
+      --layer-line: var(--purple-line);
+    }
+
+    .data-layer {
+      --layer-bg: var(--orange);
+      --layer-line: var(--orange-line);
+    }
+
+    .server-layer {
+      --layer-bg: var(--gray);
+      --layer-line: var(--gray-line);
+    }
+
+    .module-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .app-grid {
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+    }
+
+    .business-grid {
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+    }
+
+    .service-grid {
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+    }
+
+    .server-grid {
+      grid-template-columns: repeat(3, minmax(190px, 1fr));
+    }
+
+    .module-card,
+    .simple-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      box-shadow: 0 4px 14px rgba(30, 41, 59, 0.04);
+    }
+
+    .simple-card {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 10px 12px;
+      color: #334155;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .module-card {
+      padding: 12px;
+    }
+
+    .module-title {
+      margin: 0 0 9px;
+      color: #243447;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .module-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .module-list li {
+      padding: 5px 8px;
+      border: 1px solid #e1e8f0;
+      border-radius: 10px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .core-metrics {
+      position: relative;
+      border-color: #78aee8;
+      background: linear-gradient(180deg, #ffffff 0%, #f3f8ff 100%);
+      box-shadow: 0 10px 24px rgba(59, 130, 246, 0.14);
+    }
+
+    .core-metrics .module-title {
+      color: #1d4f91;
+    }
+
+    .core-metrics .module-list li {
+      border-color: #bfdbfe;
+      background: #eaf3ff;
+      color: #1e4e8c;
+    }
+
+    .data-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .data-panel {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.86);
+    }
+
+    .data-panel h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .data-items {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(110px, 1fr));
+      gap: 8px;
+    }
+
+    .data-item {
+      padding: 9px 10px;
+      border: 1px solid #e1e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .shared-source {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--green-line);
+      border-radius: 14px;
+      background: var(--green);
+      color: #246144;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .server-card {
+      justify-content: flex-start;
+      min-height: 50px;
+      text-align: left;
+    }
+
+    .server-card strong {
+      color: #1f2937;
+      font-weight: 700;
+    }
+
+    .description {
+      margin-top: 18px;
+      padding: 18px 20px;
+      border: 1px solid #e5ebf3;
+      border-radius: 18px;
+      background: #ffffff;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1024px) {
+      .app-grid,
+      .business-grid,
+      .service-grid,
+      .server-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100vw - 24px, 1200px);
+        margin: 18px auto;
+      }
+
+      .architecture {
+        padding: 12px;
+      }
+
+      .layer {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .layer-label {
+        min-height: 48px;
+      }
+
+      .app-grid,
+      .business-grid,
+      .service-grid,
+      .server-grid,
+      .data-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .data-items {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <h1>VisionGuard 产品整体架构图</h1>
+      <p>应用层 → 业务层 → 基础服务层 → 数据层 → 服务器层</p>
+    </header>
+
+    <section class="architecture" aria-label="VisionGuard 产品整体架构图">
+      <section class="layer app-layer">
+        <div class="layer-label">应用层</div>
+        <div class="layer-content">
+          <p class="layer-note">VisionGuard 当前主要是电脑端网页应用，用户通过浏览器访问和使用。</p>
+          <div class="module-grid app-grid">
+            <div class="simple-card">PC Web App</div>
+            <div class="simple-card">Landing</div>
+            <div class="simple-card">Login / Register</div>
+            <div class="simple-card">Dashboard</div>
+            <div class="simple-card">Trend</div>
+            <div class="simple-card">AI Report</div>
+            <div class="simple-card">Settings</div>
+            <div class="simple-card">Privacy</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layer business-layer">
+        <div class="layer-label">业务层</div>
+        <div class="layer-content">
+          <div class="module-grid business-grid">
+            <article class="module-card">
+              <h2 class="module-title">用户账号模块</h2>
+              <ul class="module-list">
+                <li>登录</li>
+                <li>注册</li>
+                <li>用户信息</li>
+              </ul>
+            </article>
+            <article class="module-card">
+              <h2 class="module-title">实时监测模块</h2>
+              <ul class="module-list">
+                <li>摄像头启动</li>
+                <li>校准状态</li>
+                <li>检测状态</li>
+              </ul>
+            </article>
+            <article class="module-card core-metrics">
+              <h2 class="module-title">核心指标模块</h2>
+              <ul class="module-list">
+                <li>Blink Rate</li>
+                <li>Distance</li>
+                <li>Brightness</li>
+                <li>Session Time</li>
+                <li>Daily Load</li>
+              </ul>
+            </article>
+            <article class="module-card">
+              <h2 class="module-title">用眼评分模块</h2>
+              <ul class="module-list">
+                <li>Daily Score</li>
+                <li>Risk Level</li>
+              </ul>
+            </article>
+            <article class="module-card">
+              <h2 class="module-title">智能提醒模块</h2>
+              <ul class="module-list">
+                <li>Blink Reminder</li>
+                <li>Distance Reminder</li>
+                <li>Brightness Reminder</li>
+                <li>Rest Reminder</li>
+                <li>Daily Load Reminder</li>
+              </ul>
+            </article>
+            <article class="module-card">
+              <h2 class="module-title">趋势分析模块</h2>
+              <ul class="module-list">
+                <li>Today Overview</li>
+                <li>7-day Trend</li>
+                <li>Date Picker</li>
+              </ul>
+            </article>
+            <article class="module-card">
+              <h2 class="module-title">AI Report 模块</h2>
+              <ul class="module-list">
+                <li>Generate Report</li>
+                <li>Key Findings</li>
+                <li>Recommendations</li>
+                <li>Action Plan</li>
+                <li>Report History</li>
+              </ul>
+            </article>
+            <article class="module-card">
+              <h2 class="module-title">设置与隐私模块</h2>
+              <ul class="module-list">
+                <li>Camera Permission</li>
+                <li>Notification Permission</li>
+                <li>Clear Data</li>
+                <li>Privacy Notice</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="layer service-layer">
+        <div class="layer-label">基础服务层</div>
+        <div class="layer-content">
+          <div class="module-grid service-grid">
+            <div class="simple-card">用户服务 User Service</div>
+            <div class="simple-card">摄像头权限服务 Camera Permission</div>
+            <div class="simple-card">浏览器通知服务 Notification Service</div>
+            <div class="simple-card">视觉检测服务 CV Detection</div>
+            <div class="simple-card">指标计算服务 Metrics Engine</div>
+            <div class="simple-card">评分规则服务 Score Engine</div>
+            <div class="simple-card">提醒规则服务 Reminder Engine</div>
+            <div class="simple-card">数据同步服务 Data Sync</div>
+            <div class="simple-card">AI 报告服务 Report API</div>
+            <div class="simple-card">隐私与安全服务 Privacy &amp; Safety</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layer data-layer">
+        <div class="layer-label">数据层</div>
+        <div class="layer-content">
+          <div class="data-wrap">
+            <article class="data-panel">
+              <h3>数据处理能力</h3>
+              <div class="data-items">
+                <div class="data-item">数据采集</div>
+                <div class="data-item">异常过滤</div>
+                <div class="data-item">每日汇总</div>
+                <div class="data-item">数据快照</div>
+                <div class="data-item">数据同步</div>
+              </div>
+            </article>
+            <article class="data-panel">
+              <h3>业务数据</h3>
+              <div class="data-items">
+                <div class="data-item">users</div>
+                <div class="data-item">metrics_stream</div>
+                <div class="data-item">metrics_daily</div>
+                <div class="data-item">reminders</div>
+                <div class="data-item">reports</div>
+                <div class="data-item">data_snapshot</div>
+              </div>
+            </article>
+          </div>
+          <div class="shared-source">统一数据源：Dashboard / Trend / AI Report 共用</div>
+        </div>
+      </section>
+
+      <section class="layer server-layer">
+        <div class="layer-label">服务器层</div>
+        <div class="layer-content">
+          <div class="module-grid server-grid">
+            <div class="simple-card server-card"><strong>前端服务：</strong>React + TypeScript + Vite</div>
+            <div class="simple-card server-card"><strong>后端服务：</strong>Flask API</div>
+            <div class="simple-card server-card"><strong>视觉检测：</strong>OpenCV + MediaPipe</div>
+            <div class="simple-card server-card"><strong>数据存储：</strong>localStorage / SQLite</div>
+            <div class="simple-card server-card"><strong>AI 服务：</strong>DeepSeek API</div>
+            <div class="simple-card server-card"><strong>部署环境：</strong>Localhost / Cloud Server / HTTPS</div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <footer class="description">
+      VisionGuard 产品架构分为应用层、业务层、基础服务层、数据层和服务器层。用户通过 PC Web App 使用实时监测、趋势分析和 AI Report 等功能；业务层围绕五个核心用眼指标完成监测、评分、提醒和报告生成；基础服务层提供摄像头权限、视觉检测、指标计算、评分规则、通知分发和数据同步能力；数据层统一沉淀实时指标、每日汇总、提醒记录和报告数据，确保 Dashboard、Trend 和 AI Report 使用同一套数据源；服务器层由前端服务、后端 API、视觉检测环境、数据存储和 AI 接口组成。
+    </footer>
+  </main>
+</body>
+</html>

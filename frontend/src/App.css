@@ -5474,6 +5474,13 @@ label {
   background: #f8fafc;
 }
 
+.report-article > .report-section {
+  padding: 16px 0;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .ai-report-cards .report-section {
   flex: 0 0 clamp(240px, 30%, 320px);
   min-width: 240px;
